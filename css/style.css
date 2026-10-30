@@ -57,6 +57,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .icon-btn { background: none; border: 1px solid var(--line); color: var(--fg); border-radius: 9px;
   font: inherit; cursor: pointer; padding: 6px 10px; font-size: 13px; }
 .icon-btn:hover { background: var(--fill-faint); }
+.icon-btn.actif { border-color: var(--accent); color: var(--accent); }
 .etat-dico { font-size: 11px; color: var(--muted); }
 
 .sect-label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase;

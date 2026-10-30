@@ -5,6 +5,10 @@ import {
   ajouterLigne, modifierLigne, basculerValide, supprimerLigne, ajouterPlacard, uid,
 } from './model.js';
 import { esc, autoGrow } from './ui-util.js';
+import { compterPieds } from './syllabes.js';
+import { grouperRimes } from './rimes.js';
+import { chargerDico } from './dico.js';
+import { surlignageActif, basculerSurlignage } from './reglages.js';
 
 let M = null;            // morceau courant (état de l'écran)
 let appEl = null;
@@ -86,6 +90,7 @@ function dessiner() {
   appEl.innerHTML = `
     <div class="app-head">
       <button class="lien-retour" id="retour">← mes morceaux</button><span class="spacer"></span>
+      <button class="icon-btn ${surlignageActif() ? 'actif' : ''}" id="rimes" title="surlignage des rimes">rimes</button>
       <button class="icon-btn" id="statut">${M.statut === 'fini' ? '✓ fini' : 'en cours'}</button>
     </div>
     <input class="titre-morceau" id="titre" placeholder="Titre du morceau" value="${esc(M.titre)}">
@@ -98,6 +103,11 @@ function dessiner() {
   document.getElementById('statut').addEventListener('click', async () => {
     M.statut = M.statut === 'fini' ? 'en_cours' : 'fini';
     await sauverMaintenant(); dessiner();
+  });
+  document.getElementById('rimes').addEventListener('click', (e) => {
+    const actif = basculerSurlignage();
+    e.currentTarget.classList.toggle('actif', actif);
+    majPiedsEtRimes();
   });
   const titre = document.getElementById('titre');
   titre.addEventListener('input', () => { M.titre = titre.value; sauverBientot(); });
@@ -161,6 +171,8 @@ function dessiner() {
   }));
 
   majPiedsEtRimes();
+  // Rafraîchit une fois le dico chargé en différé (valeurs d'abord via G2P).
+  chargerDico().then(majPiedsEtRimes).catch(() => {});
 }
 
 // Cherche/supprime un essai dans les vraies listes (placards de lignes + détachés).
@@ -173,5 +185,23 @@ function supprimerEssai(id) {
   retirerIdee(M.detaches, id);
 }
 
-// Rempli en Task 12 (surlignage des rimes + compteur de pieds).
-function majPiedsEtRimes() {}
+// Compteur de pieds (toujours) + schéma de rime en barres colorées (si activé).
+// Recalcul O(N) léger (1 lookup phonétique par ligne) à chaque frappe.
+function majPiedsEtRimes() {
+  if (!M) return;
+  const textes = M.lignes.map((l) => l.texte);
+  const groupes = surlignageActif() ? grouperRimes(textes) : textes.map(() => null);
+  M.lignes.forEach((l, i) => {
+    const bloc = appEl.querySelector(`.bloc-ligne[data-ligne="${CSS.escape(l.id)}"]`);
+    if (!bloc) return;
+    const pieds = bloc.querySelector('.pieds');
+    if (pieds) { const n = compterPieds(l.texte); pieds.textContent = n || ''; }
+    const row = bloc.querySelector('.ligne-row');
+    const g = groupes[i];
+    if (g != null) {
+      row.style.boxShadow = `inset 3px 0 0 0 var(--r${g % 8})`;
+    } else {
+      row.style.boxShadow = '';
+    }
+  });
+}
