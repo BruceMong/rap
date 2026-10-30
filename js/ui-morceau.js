@@ -6,14 +6,15 @@ import {
 } from './model.js';
 import { esc, autoGrow } from './ui-util.js';
 import { compterPieds } from './syllabes.js';
-import { grouperRimes } from './rimes.js';
-import { chargerDico } from './dico.js';
+import { grouperRimes, trouverRimes } from './rimes.js';
+import { chargerDico, dicoPret } from './dico.js';
 import { surlignageActif, basculerSurlignage } from './reglages.js';
 
 let M = null;            // morceau courant (état de l'écran)
 let appEl = null;
 const ouverts = new Set(); // ids de lignes dont le placard est déplié
 let timer = null;
+let cible = null;          // { id, pos } : dernier curseur dans une ligne (cible d'insertion)
 
 function sauverBientot() {
   clearTimeout(timer);
@@ -44,6 +45,7 @@ export async function rendreMorceau(app, id) {
   appEl = app;
   M = await getMorceau(id);
   if (!M) { location.hash = ''; return; }
+  fermerPanneau();
   dessiner();
 }
 
@@ -72,6 +74,7 @@ function ligneHTML(l) {
         <span class="ligne-actions">
           <button class="mini toggle-placard" data-ligne="${esc(l.id)}" title="brouillons">
             <span class="chevron">›</span>${np ? np : ''}</button>
+          <button class="mini" data-rimes="${esc(l.id)}" title="chercher des rimes">♪</button>
           <button class="mini ${l.valide ? 'actif' : ''}" data-valide="${esc(l.id)}" title="validé">✓</button>
           <button class="mini" data-del="${esc(l.id)}" title="supprimer la ligne">✕</button>
         </span>
@@ -122,13 +125,24 @@ function dessiner() {
   // textarea de lignes
   appEl.querySelectorAll('.ligne-edit').forEach((ta) => {
     autoGrow(ta);
+    const noterCible = () => { cible = { id: ta.dataset.ligne, pos: ta.selectionStart }; };
+    ta.addEventListener('focus', noterCible);
+    ta.addEventListener('click', noterCible);
+    ta.addEventListener('keyup', noterCible);
     ta.addEventListener('input', () => {
       const l = M.lignes.find((x) => x.id === ta.dataset.ligne);
       if (l) { l.texte = ta.value; sauverBientot(); }
+      noterCible();
       autoGrow(ta);
-      majPiedsEtRimes(); // défini en Task 12 (no-op ici)
+      majPiedsEtRimes();
     });
   });
+
+  appEl.querySelectorAll('[data-rimes]').forEach((b) => b.addEventListener('click', () => {
+    const l = M.lignes.find((x) => x.id === b.dataset.rimes);
+    const mot = dernierMotDe(l ? l.texte : '');
+    if (mot) ouvrirPanneauRimes(mot);
+  }));
 
   // essais
   appEl.querySelectorAll('.essai-edit').forEach((ta) => {
@@ -183,6 +197,62 @@ function trouverEssai(id) {
 function supprimerEssai(id) {
   for (const l of M.lignes) { if (retirerIdee(l.placards, id)) return; }
   retirerIdee(M.detaches, id);
+}
+
+// --- panneau de rimes (Task 13) ---
+function dernierMotDe(texte) {
+  const t = String(texte || '').toLowerCase().match(/[a-zà-ÿœ]+(?:'[a-zà-ÿœ]+)*/g);
+  return t ? t[t.length - 1] : null;
+}
+
+function fermerPanneau() {
+  const p = document.getElementById('pan-rimes');
+  if (p) p.remove();
+}
+
+function inserer(mot) {
+  const ta = cible && appEl.querySelector(`.ligne-edit[data-ligne="${CSS.escape(cible.id)}"]`);
+  if (ta) {
+    const p = cible.pos ?? ta.value.length;
+    const avant = ta.value.slice(0, p);
+    const sep = (p > 0 && !/\s$/.test(avant)) ? ' ' : '';
+    ta.value = avant + sep + mot + ta.value.slice(p);
+    const l = M.lignes.find((x) => x.id === cible.id);
+    if (l) { l.texte = ta.value; sauverBientot(); }
+    autoGrow(ta);
+    const np = p + sep.length + mot.length;
+    cible.pos = np;
+    ta.focus();
+    ta.setSelectionRange(np, np);
+    majPiedsEtRimes();
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(mot).catch(() => {});
+  }
+  fermerPanneau();
+}
+
+function ouvrirPanneauRimes(mot) {
+  fermerPanneau();
+  const pan = document.createElement('div');
+  pan.className = 'panneau-rimes';
+  pan.id = 'pan-rimes';
+  pan.innerHTML = `<header><h3>Rime avec « ${esc(mot)} »</h3>
+      <span style="flex:1"></span>
+      <button class="icon-btn" id="pan-close">fermer</button></header>
+    <div class="rimes-liste" id="rimes-liste"><span class="vide">…</span></div>`;
+  document.body.appendChild(pan);
+  document.getElementById('pan-close').addEventListener('click', fermerPanneau);
+
+  const remplir = () => {
+    const liste = document.getElementById('rimes-liste');
+    if (!liste) return;
+    const r = trouverRimes(mot, { max: 120 });
+    liste.innerHTML = r.length
+      ? r.map((x) => `<button class="rime-chip rich-${x.richesse}" data-mot="${esc(x.mot)}">${esc(x.mot)}<span class="rich">${x.pieds}</span></button>`).join('')
+      : '<span class="vide">Aucune rime trouvée</span>';
+    liste.querySelectorAll('[data-mot]').forEach((b) => b.addEventListener('click', () => inserer(b.dataset.mot)));
+  };
+  if (dicoPret()) remplir(); else chargerDico().then(remplir).catch(() => {});
 }
 
 // Compteur de pieds (toujours) + schéma de rime en barres colorées (si activé).
