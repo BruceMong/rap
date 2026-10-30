@@ -46,15 +46,39 @@ export function grouperRimes(vers) {
   });
 }
 
+function richesseDeSuffixe(s) {
+  if (!contientVoyelle(s)) return 'aucune';
+  if (s.length >= 3) return 'riche';
+  if (s.length === 2) return 'suffisante';
+  return 'pauvre';
+}
+
 // 'aucune' | 'pauvre' | 'suffisante' | 'riche'
 export function classerRime(motA, motB) {
   if (normaliser(motA) === normaliser(motB)) return 'aucune';
   const pa = phonemiser(motA);
   const pb = phonemiser(motB);
   if (!pa || !pb) return 'aucune';
-  const s = suffixeCommun(pa, pb);
-  if (!contientVoyelle(s)) return 'aucune';
-  if (s.length >= 3) return 'riche';
-  if (s.length === 2) return 'suffisante';
-  return 'pauvre';
+  return richesseDeSuffixe(suffixeCommun(pa, pb));
+}
+
+const RANG = { riche: 3, suffisante: 2, pauvre: 1 };
+
+// Mots du dico qui riment avec `mot`, triés richesse ↓ puis pieds ↑, mot exclu.
+export function trouverRimes(mot, opts = {}) {
+  const pa = phonemiser(mot);
+  const base = normaliser(mot);
+  if (!pa) return [];
+  const res = [];
+  for (const [ortho, { p, s }] of entrees()) {
+    if (ortho === base) continue;
+    const r = richesseDeSuffixe(suffixeCommun(pa, p));
+    if (r === 'aucune') continue;
+    res.push({ mot: ortho, richesse: r, pieds: s });
+  }
+  res.sort((a, b) =>
+    RANG[b.richesse] - RANG[a.richesse] ||
+    a.pieds - b.pieds ||
+    a.mot.localeCompare(b.mot, 'fr'));
+  return res.slice(0, opts.max ?? 200);
 }
