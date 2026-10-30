@@ -42,6 +42,7 @@ async function init() {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
+  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
   window.addEventListener('hashchange', router);
   await router();
   chargerDico().catch(() => {});
