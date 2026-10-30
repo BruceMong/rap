@@ -1,0 +1,15 @@
+{
+  "name": "Rap",
+  "short_name": "Rap",
+  "description": "Écrire du rap : placards, rimes et syllabes, hors ligne",
+  "lang": "fr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#15140f",
+  "theme_color": "#15140f",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
