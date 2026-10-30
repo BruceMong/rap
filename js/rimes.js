@@ -15,6 +15,37 @@ function contientVoyelle(phon) {
   return false;
 }
 
+function dernierMot(vers) {
+  const t = String(vers).toLowerCase().replace(/[’´`]/g, "'")
+    .match(/[a-zà-ÿœ]+(?:'[a-zà-ÿœ]+)*/g);
+  return t ? t[t.length - 1] : null;
+}
+
+// Terminaison rimique du dernier mot : de la dernière voyelle à la fin.
+// null si pas de mot final alphabétique ou pas de voyelle. Ne dépend que du
+// dernier mot → recalcul par ligne côté UI.
+export function clePhonetique(vers) {
+  const mot = dernierMot(vers);
+  if (!mot) return null;
+  const p = phonemiser(mot);
+  for (let i = p.length - 1; i >= 0; i--) {
+    if (VOYELLES.has(p[i])) return p.slice(i);
+  }
+  return null;
+}
+
+// Index de groupe par terminaison partagée (1re clé → 0, etc.), null sinon.
+export function grouperRimes(vers) {
+  const map = new Map();
+  let next = 0;
+  return vers.map((v) => {
+    const c = clePhonetique(v);
+    if (c === null) return null;
+    if (!map.has(c)) map.set(c, next++);
+    return map.get(c);
+  });
+}
+
 // 'aucune' | 'pauvre' | 'suffisante' | 'riche'
 export function classerRime(motA, motB) {
   if (normaliser(motA) === normaliser(motB)) return 'aucune';
