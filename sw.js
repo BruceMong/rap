@@ -4,8 +4,9 @@ const CACHE = 'rap-v1';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/dico.js', 'js/phonetique.js', 'js/syllabes.js', 'js/rimes.js',
-  'js/model.js', 'js/store.js', 'js/ui-accueil.js', 'js/ui-morceau.js', 'js/reglages.js',
-];
+  'js/model.js', 'js/store.js', 'js/ui-util.js', 'js/ui-accueil.js', 'js/ui-morceau.js',
+  'js/ui-apropos.js', 'js/reglages.js',
+]; // le dico (data/lexique-min.json) est caché au 1er chargement différé, pas ici
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
