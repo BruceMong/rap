@@ -1,0 +1,14 @@
+{
+  "name": "rap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "App d'écriture de rap : placards, rimes et syllabes, hors ligne",
+  "scripts": {
+    "test": "node --test",
+    "build:dico": "node tools/build-dico.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.0.0"
+  }
+}
