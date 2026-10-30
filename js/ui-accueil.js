@@ -1,7 +1,7 @@
 // Écran d'accueil : coffre à idées transversal + morceaux en cours / terminés.
 import { listerMorceaux, getCoffre, sauverCoffre, sauverMorceau, getMorceau } from './store.js';
 import { creerMorceau, envoyerIdeeVersMorceau, uid } from './model.js';
-import { esc, dateRelative } from './ui-util.js';
+import { esc, dateRelative, alerteStockage } from './ui-util.js';
 
 function apercu(m) {
   const l = (m.lignes || []).find((x) => x.texte && x.texte.trim());
@@ -67,7 +67,7 @@ export async function rendreAccueil(app) {
 
   document.getElementById('nouveau').addEventListener('click', async () => {
     const m = creerMorceau('');
-    await sauverMorceau(m);
+    try { await sauverMorceau(m); } catch { alerteStockage(); return; }
     location.hash = 'm=' + m.id;
   });
 
@@ -91,7 +91,7 @@ function ajouterIdee(app, coffre) {
     const texte = input.value.trim();
     if (!texte) { li.remove(); return; }
     coffre.push({ id: uid(), texte, enfants: [] });
-    await sauverCoffre(coffre);
+    try { await sauverCoffre(coffre); } catch { alerteStockage(); return; }
     rendreAccueil(app);
   };
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
@@ -111,8 +111,8 @@ function choisirDestination(app, coffre, ideeId, morceaux) {
     b.addEventListener('click', async () => {
       const m = await getMorceau(b.dataset.mid);
       const r = envoyerIdeeVersMorceau(coffre, ideeId, m);
-      await sauverCoffre(r.coffre);
-      await sauverMorceau(r.morceau);
+      try { await sauverCoffre(r.coffre); await sauverMorceau(r.morceau); }
+      catch { alerteStockage(); return; }
       location.hash = 'm=' + m.id;
     });
   });

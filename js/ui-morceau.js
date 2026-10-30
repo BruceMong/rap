@@ -4,7 +4,7 @@ import { getMorceau, sauverMorceau } from './store.js';
 import {
   ajouterLigne, modifierLigne, basculerValide, supprimerLigne, ajouterPlacard, uid,
 } from './model.js';
-import { esc, autoGrow } from './ui-util.js';
+import { esc, autoGrow, alerteStockage } from './ui-util.js';
 import { compterPieds } from './syllabes.js';
 import { grouperRimes, trouverRimes } from './rimes.js';
 import { chargerDico, dicoPret } from './dico.js';
@@ -18,12 +18,24 @@ let cible = null;          // { id, pos } : dernier curseur dans une ligne (cibl
 
 function sauverBientot() {
   clearTimeout(timer);
-  timer = setTimeout(() => { M.modifieLe = Date.now(); sauverMorceau(M); }, 400);
+  timer = setTimeout(() => { M.modifieLe = Date.now(); sauverMorceau(M).catch(alerteStockage); }, 400);
 }
 async function sauverMaintenant() {
   clearTimeout(timer);
+  if (!M) return;
   M.modifieLe = Date.now();
-  await sauverMorceau(M);
+  try { await sauverMorceau(M); } catch { alerteStockage(); }
+}
+
+// Flush de la saisie débouncée quand l'app passe en arrière-plan (OS peut geler
+// l'onglet sur mobile). Installé une seule fois.
+let flushInstalle = false;
+function installerFlush() {
+  if (flushInstalle) return;
+  flushInstalle = true;
+  const flush = () => { if (document.visibilityState === 'hidden') sauverMaintenant(); };
+  document.addEventListener('visibilitychange', flush);
+  window.addEventListener('pagehide', flush);
 }
 
 // --- helpers d'arbre pour les essais (placards) ---
@@ -46,6 +58,7 @@ export async function rendreMorceau(app, id) {
   M = await getMorceau(id);
   if (!M) { location.hash = ''; return; }
   fermerPanneau();
+  installerFlush();
   dessiner();
 }
 

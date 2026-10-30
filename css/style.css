@@ -171,4 +171,9 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .apropos { font-size: 13px; color: var(--muted); margin-top: 24px; text-align: center; }
 .apropos a { color: var(--accent); }
 
+.banniere-stockage { position: fixed; left: 0; right: 0; top: 0; z-index: 50;
+  background: var(--sys-red, #c2410c); color: #fff; font-size: 13px; line-height: 1.4;
+  padding: 10px max(16px, env(safe-area-inset-left, 0px));
+  padding-top: calc(10px + env(safe-area-inset-top, 0px)); text-align: center; }
+
 @media (prefers-reduced-motion: reduce) { .placard, .chevron { transition: none; } }

@@ -42,18 +42,26 @@ function finTransaction(st) {
   });
 }
 
-export function listerMorceaux() { return attendre(store('morceaux', 'readonly').getAll()); }
-export function getMorceau(id) { return attendre(store('morceaux', 'readonly').get(id)); }
-export function sauverMorceau(m) { return attendre(store('morceaux', 'readwrite').put(m)); }
-export function supprimerMorceau(id) { return attendre(store('morceaux', 'readwrite').delete(id)); }
+// Enveloppe une opération de store : une erreur synchrone (ex. donnée non
+// clonable) devient un rejet, pour être catchée comme un échec async (quota).
+function sur(fn) {
+  try { return fn(); } catch (e) { return Promise.reject(e); }
+}
 
-export function getCoffre() { return attendre(store('coffre', 'readonly').getAll()); }
+export function listerMorceaux() { return sur(() => attendre(store('morceaux', 'readonly').getAll())); }
+export function getMorceau(id) { return sur(() => attendre(store('morceaux', 'readonly').get(id))); }
+export function sauverMorceau(m) { return sur(() => attendre(store('morceaux', 'readwrite').put(m))); }
+export function supprimerMorceau(id) { return sur(() => attendre(store('morceaux', 'readwrite').delete(id))); }
+
+export function getCoffre() { return sur(() => attendre(store('coffre', 'readonly').getAll())); }
 
 export function sauverCoffre(idees) {
-  const st = store('coffre', 'readwrite');
-  st.clear();
-  for (const i of idees) st.put(i);
-  return finTransaction(st);
+  return sur(() => {
+    const st = store('coffre', 'readwrite');
+    st.clear();
+    for (const i of idees) st.put(i);
+    return finTransaction(st);
+  });
 }
 
 export async function exporter() {

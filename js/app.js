@@ -6,11 +6,15 @@ import { rendreAccueil } from './ui-accueil.js';
 
 const app = document.getElementById('app');
 
-function messageStockage() {
+function messageStockage(e) {
+  const indispo = e instanceof StockageIndisponible;
   app.innerHTML =
     '<div class="app-head"><h1>Rap</h1></div>' +
-    '<p class="vide">Le stockage local est indisponible sur ce navigateur ' +
-    '(navigation privée ?). Tes textes ne pourraient pas être enregistrés.</p>';
+    '<p class="vide">' +
+    (indispo
+      ? 'Le stockage local est indisponible sur ce navigateur (navigation privée ?). '
+      : "Impossible d'ouvrir le stockage local sur ce navigateur. ") +
+    'Tes textes ne pourraient pas être enregistrés.</p>';
 }
 
 async function router() {
@@ -36,8 +40,9 @@ async function init() {
   try {
     await ouvrir();
   } catch (e) {
-    if (e instanceof StockageIndisponible) { messageStockage(); return; }
-    throw e;
+    console.error('ouverture du stockage impossible', e);
+    messageStockage(e); // tout échec d'ouverture → message, jamais d'écran blanc
+    return;
   }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});

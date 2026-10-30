@@ -33,3 +33,9 @@ test('exporter rend un JSON reparsable avec morceaux et coffre', async () => {
 test('sans IndexedDB, ouvrir rejette StockageIndisponible', async () => {
   await assert.rejects(() => ouvrir(null), StockageIndisponible); // Review Focus
 });
+
+test('une écriture qui échoue est propagée (pas avalée), pour être signalée', async () => {
+  await ouvrir();
+  // un objet non clonable (fonction) déclenche une DataCloneError côté store
+  await assert.rejects(() => sauverMorceau({ id: 'bad', f: () => {} })); // Review Focus #4
+});
