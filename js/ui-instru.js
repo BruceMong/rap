@@ -146,6 +146,8 @@ function rendre() {
   assurerAudio();
   const boucle = instru.mode === 'boucle';
   const multi = liste.length > 1;
+  // Le réglage A–B se fait dans l'écran « Mes instrus » (hors morceau) pour éviter
+  // les resets accidentels pendant l'écriture : ici, juste lecture + mode.
   b.innerHTML = `
     <div class="instru-ligne">
       <button class="instru-btn" id="rew" title="reculer de 5 s">«</button>
@@ -153,14 +155,8 @@ function rendre() {
       <button class="instru-btn" id="ff" title="avancer de 5 s">»</button>
       <input type="range" id="seek" min="0" max="100" step="0.1" value="0" class="instru-seek">
       <span class="instru-temps" id="temps">0:00</span>
-      <button class="instru-btn ${boucle ? 'actif' : ''}" id="mode">${boucle ? 'boucle' : 'normal'}</button>
+      <button class="instru-btn ${boucle ? 'actif' : ''}" id="mode" title="${boucle ? 'boucle A–B (réglée dans « Mes instrus »)' : 'lecture en boucle complète'}">${boucle ? 'boucle' : 'normal'}</button>
     </div>
-    ${boucle ? `<div class="instru-ligne instru-loop">
-      <span class="instru-temps">A <b id="va">${fmt(instru.loopA)}</b> · B <b id="vb">${fmt(instru.loopB)}</b></span>
-      <button class="instru-btn" id="poseA">A = ici</button>
-      <button class="instru-btn" id="poseB">B = ici</button>
-      <button class="instru-btn" id="playA" title="démarrer au début de la boucle">▶ A</button>
-    </div>` : ''}
     <button class="instru-nom" id="choisir" title="choisir / ajouter un instru">${esc(instru.nom)} ▾${multi ? ` (${liste.length})` : ''}</button>`;
 
   b.querySelector('#pp').onclick = () => { if (audio.paused) audio.play().catch(() => {}); else audio.pause(); };
@@ -174,11 +170,6 @@ function rendre() {
     rendre();
   };
   b.querySelector('#choisir').onclick = ouvrirSelecteur;
-  if (boucle) {
-    b.querySelector('#poseA').onclick = () => { instru.loopA = audio.currentTime; if (instru.loopB <= instru.loopA) instru.loopB = audio.duration; sauvegarder(); peindre(); };
-    b.querySelector('#poseB').onclick = () => { instru.loopB = Math.max(audio.currentTime, instru.loopA + 0.1); sauvegarder(); peindre(); };
-    b.querySelector('#playA').onclick = () => { audio.currentTime = instru.loopA; audio.play().catch(() => {}); };
-  }
   peindre();
 }
 
@@ -235,6 +226,4 @@ function peindre() {
   const dur = audio.duration || 0;
   const seek = b.querySelector('#seek'); if (seek && dur) seek.value = (audio.currentTime / dur) * 100;
   const t = b.querySelector('#temps'); if (t) t.textContent = `${fmt(audio.currentTime)} / ${fmt(dur)}`;
-  const va = b.querySelector('#va'); if (va) va.textContent = fmt(instru.loopA);
-  const vb = b.querySelector('#vb'); if (vb) vb.textContent = fmt(instru.loopB);
 }
