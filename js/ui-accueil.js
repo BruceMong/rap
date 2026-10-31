@@ -1,15 +1,18 @@
 // Écran d'accueil : coffre à idées transversal + morceaux en cours / terminés.
 import { listerMorceaux, getCoffre, sauverCoffre, sauverMorceau, getMorceau, supprimerMorceau } from './store.js';
-import { creerMorceau, envoyerIdeeVersMorceau, morceauDepuisTexte, uid } from './model.js';
+import {
+  creerMorceau, envoyerIdeeVersMorceau, morceauDepuisTexte, versionActive, migrerMorceau, uid,
+} from './model.js';
 import { esc, dateRelative, alerteStockage } from './ui-util.js';
 import { planifier as planifierBackup } from './backup.js';
 
+function lignesDe(m) { return versionActive(migrerMorceau(m)).lignes; }
 function apercu(m) {
-  const l = (m.lignes || []).find((x) => x.texte && x.texte.trim());
+  const l = lignesDe(m).find((x) => x.texte && x.texte.trim());
   return l ? l.texte.trim() : 'Vide pour l’instant';
 }
 function nbPlacards(m) {
-  return (m.lignes || []).reduce((n, l) => n + (l.placards ? l.placards.length : 0), 0);
+  return lignesDe(m).reduce((n, l) => n + (l.placards ? l.placards.length : 0), 0);
 }
 
 function carte(m) {
@@ -17,9 +20,11 @@ function carte(m) {
     ? '<span class="pill fini">fini</span>'
     : '<span class="pill encours">en cours</span>';
   const np = nbPlacards(m);
+  const nbv = (migrerMorceau(m).versions || []).length;
   const meta = [
-    `<b>${(m.lignes || []).length}</b> lignes`,
+    `<b>${lignesDe(m).length}</b> lignes`,
     np ? `<b>${np}</b> placards` : '',
+    nbv > 1 ? `<b>${nbv}</b> versions` : '',
     dateRelative(m.modifieLe),
   ].filter(Boolean).map((x) => `<span>${x}</span>`).join('');
   return `<div class="morceau${m.epingle ? ' epingle' : ''}" data-id="${esc(m.id)}" role="button" tabindex="0">

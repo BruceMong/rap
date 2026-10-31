@@ -184,7 +184,12 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .poignee { flex: none; align-self: stretch; display: flex; align-items: center; color: var(--muted);
   cursor: grab; touch-action: none; user-select: none; padding: 0 3px; font-size: 14px; }
 .poignee:active { cursor: grabbing; }
-.drag-source { transition: height .18s ease, opacity .18s ease; opacity: 0; overflow: hidden; }
+.drag-source { opacity: .4; transition: opacity .15s ease; }
+.drop-indic { height: 3px; background: var(--accent); border-radius: 2px; margin: 2px 8px 2px 26px; }
+.drag-cancel { position: fixed; left: 50%; transform: translateX(-50%); z-index: 61;
+  top: calc(10px + env(safe-area-inset-top, 0px)); background: var(--surface); border: 1px solid var(--line);
+  color: var(--muted); border-radius: 18px; padding: 7px 16px; font-size: 13px; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+.drag-cancel.actif { border-color: var(--sys-red, #c2410c); color: var(--sys-red, #c2410c); }
 .drag-cible .ligne-row { outline: 2px solid var(--accent); background: var(--fill);
   transform: scale(1.015); transition: transform .12s ease, background .12s ease; border-radius: 10px; }
 .drag-ghost { position: fixed; top: 0; left: 0; z-index: 60; pointer-events: none;
@@ -212,6 +217,26 @@ body.drag-en-cours .ligne-edit { pointer-events: none; }
   border-radius: 8px; font: inherit; font-size: 12.5px; padding: 6px 10px; cursor: pointer; }
 .menu-ligne button:hover { border-color: var(--accent); }
 .menu-ligne button.actif { color: var(--on-accent); background: var(--r1); border-color: var(--r1); }
+
+/* barre de versions */
+.versions-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 8px 0 2px; }
+.ver-chip { background: var(--fill-faint); border: 1px solid var(--line); color: var(--muted); border-radius: 16px;
+  font: inherit; font-size: 12px; padding: 5px 11px; cursor: pointer; }
+.ver-chip:hover { border-color: var(--accent); }
+.ver-chip.actif { color: var(--on-accent); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+.ver-add { background: none; border: 1px dashed var(--line); color: var(--muted); border-radius: 16px;
+  font: inherit; font-size: 13px; padding: 5px 10px; cursor: pointer; }
+.ver-add:hover { color: var(--accent); border-color: var(--accent); }
+.menu-versions { display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line);
+  background: var(--surface); border-radius: 10px; padding: 10px; margin: 6px 0; }
+.menu-versions button { background: var(--fill-faint); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 8px; font: inherit; font-size: 13px; padding: 8px 10px; cursor: pointer; text-align: left; }
+.menu-versions button:hover { border-color: var(--accent); }
+.mv-renom { display: flex; gap: 6px; }
+.mv-renom input { flex: 1; min-width: 0; border: 1px solid var(--line); background: var(--surface);
+  color: var(--fg); border-radius: 8px; font: inherit; font-size: 13px; padding: 8px; }
+.mv-renom button { flex: none; }
+#mv-suppr[data-sure="1"] { color: var(--sys-red, #c2410c); border-color: var(--sys-red, #c2410c); }
 
 /* vues lecture : gardé (jaune) vs à tester (vert) */
 .scene-texte p.garde { border-left: 3px solid var(--accent); padding-left: 10px; }

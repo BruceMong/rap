@@ -3,7 +3,9 @@
 import { getMorceau, sauverMorceau } from './store.js';
 import {
   ajouterLigne, modifierLigne, basculerValide, basculerTest, supprimerLigne, ajouterPlacard,
-  rangerDansLigne, insererLigneApres, uid,
+  rangerDansLigne, insererLigneApres, deplacerLigne, uid,
+  versionActive, migrerMorceau, creerVersion, nouvelleVersionDepuisGardes,
+  changerVersion, renommerVersion, supprimerVersion,
 } from './model.js';
 import { esc, autoGrow, alerteStockage } from './ui-util.js';
 import { compterPieds } from './syllabes.js';
@@ -26,6 +28,10 @@ function cyclerVue() {
   vue = ORDRE_VUE[(ORDRE_VUE.indexOf(vue) + 1) % ORDRE_VUE.length];
   dessiner();
 }
+
+// Raccourcis vers les lignes / détachés de la version active du morceau courant.
+function lignesA() { return versionActive(M).lignes; }
+function detachesA() { return versionActive(M).detaches; }
 
 function sauverBientot() {
   clearTimeout(timer);
@@ -73,8 +79,9 @@ export async function rendreMorceau(app, id) {
   appEl = app;
   M = await getMorceau(id);
   if (!M) { location.hash = ''; return; }
+  M = migrerMorceau(M);
   M.ouvertLe = Date.now();
-  sauverMorceau(M).catch(() => {}); // remonte le morceau en tête de l'accueil
+  sauverMorceau(M).catch(() => {}); // remonte le morceau en tête de l'accueil (et persiste la migration)
   vue = 'edition';
   fermerPanneau();
   installerFlush();
@@ -118,10 +125,10 @@ function ligneHTML(l) {
 
 function dessiner() {
   if (vue !== 'edition') { dessinerLecture(); return; }
-  const detaches = M.detaches.length ? `
+  const detaches = detachesA().length ? `
     <div class="sect-label">Brouillons détachés</div>
     <div class="detaches"><div class="placard-pad">
-      ${M.detaches.map(essaiHTML).join('')}
+      ${detachesA().map(essaiHTML).join('')}
     </div></div>` : '';
 
   appEl.innerHTML = `
@@ -132,8 +139,12 @@ function dessiner() {
       <button class="icon-btn" id="statut">${M.statut === 'fini' ? '✓ fini' : 'en cours'}</button>
     </div>
     <input class="titre-morceau" id="titre" placeholder="Titre du morceau" value="${esc(M.titre)}">
-    <p class="aide-drag">Tire la poignée ⠿ d'une ligne et lâche-la sur une autre pour la ranger dedans.</p>
-    <div class="lignes" id="lignes">${M.lignes.map(ligneHTML).join('')}</div>
+    <div class="versions-bar">
+      ${M.versions.map((v) => `<button class="ver-chip${v.id === M.versionActiveId ? ' actif' : ''}" data-ver="${esc(v.id)}">${esc(v.nom)}</button>`).join('')}
+      <button class="ver-add" id="ver-plus" title="gérer les versions">⋯</button>
+    </div>
+    <p class="aide-drag">Tire la poignée ⠿ pour déplacer une ligne ; reste sur une ligne pour la ranger dedans.</p>
+    <div class="lignes" id="lignes">${lignesA().map(ligneHTML).join('')}</div>
     <button class="add-ligne" id="add-ligne">+ une ligne</button>
     ${detaches}
   `;
@@ -156,6 +167,13 @@ function dessiner() {
   const titre = document.getElementById('titre');
   titre.addEventListener('input', () => { M.titre = titre.value; sauverBientot(); });
 
+  appEl.querySelectorAll('.ver-chip').forEach((c) => c.addEventListener('click', async () => {
+    if (c.dataset.ver === M.versionActiveId) return;
+    M = changerVersion(M, c.dataset.ver);
+    await sauverMaintenant(); dessiner();
+  }));
+  document.getElementById('ver-plus').addEventListener('click', ouvrirMenuVersions);
+
   document.getElementById('add-ligne').addEventListener('click', async () => {
     M = ajouterLigne(M, '');
     await sauverMaintenant(); dessiner();
@@ -171,7 +189,7 @@ function dessiner() {
     ta.addEventListener('click', noterCible);
     ta.addEventListener('keyup', noterCible);
     ta.addEventListener('input', () => {
-      const l = M.lignes.find((x) => x.id === ta.dataset.ligne);
+      const l = lignesA().find((x) => x.id === ta.dataset.ligne);
       if (l) { l.texte = ta.value; sauverBientot(); }
       noterCible();
       autoGrow(ta);
@@ -231,12 +249,12 @@ function dessiner() {
 
 // Cherche/supprime un essai dans les vraies listes (placards de lignes + détachés).
 function trouverEssai(id) {
-  for (const l of M.lignes) { const t = trouverIdee(l.placards, id); if (t) return t; }
-  return trouverIdee(M.detaches, id);
+  for (const l of lignesA()) { const t = trouverIdee(l.placards, id); if (t) return t; }
+  return trouverIdee(detachesA(), id);
 }
 function supprimerEssai(id) {
-  for (const l of M.lignes) { if (retirerIdee(l.placards, id)) return; }
-  retirerIdee(M.detaches, id);
+  for (const l of lignesA()) { if (retirerIdee(l.placards, id)) return; }
+  retirerIdee(detachesA(), id);
 }
 
 // Menu compact d'une ligne : à tester (vert), rimes, insérer dessous, supprimer.
@@ -244,7 +262,7 @@ function ouvrirMenuLigne(id, bloc) {
   if (!bloc) return;
   const ex = bloc.querySelector('.menu-ligne');
   if (ex) { ex.remove(); return; }
-  const l = M.lignes.find((x) => x.id === id);
+  const l = lignesA().find((x) => x.id === id);
   if (!l) return;
   const menu = document.createElement('div');
   menu.className = 'menu-ligne';
@@ -292,7 +310,7 @@ function inserer(mot) {
     const avant = ta.value.slice(0, p);
     const sep = (p > 0 && !/\s$/.test(avant)) ? ' ' : '';
     ta.value = avant + sep + mot + ta.value.slice(p);
-    const l = M.lignes.find((x) => x.id === cible.id);
+    const l = lignesA().find((x) => x.id === cible.id);
     if (l) { l.texte = ta.value; sauverBientot(); }
     autoGrow(ta);
     const np = p + sep.length + mot.length;
@@ -330,9 +348,51 @@ function ouvrirPanneauRimes(mot) {
   if (dicoPret()) remplir(); else chargerDico().then(remplir).catch(() => {});
 }
 
+// Menu des versions : renommer, nouvelle depuis les gardés, nouvelle vide, supprimer.
+function ouvrirMenuVersions() {
+  const ex = document.getElementById('menu-versions');
+  if (ex) { ex.remove(); return; }
+  const bar = appEl.querySelector('.versions-bar');
+  if (!bar) return;
+  const va = versionActive(M);
+  const menu = document.createElement('div');
+  menu.className = 'menu-versions';
+  menu.id = 'menu-versions';
+  menu.innerHTML = `
+    <div class="mv-renom">
+      <input id="mv-nom" value="${esc(va.nom)}" maxlength="40">
+      <button id="mv-ok">renommer</button>
+    </div>
+    <button id="mv-garde">+ nouvelle version depuis les vers gardés</button>
+    <button id="mv-vide">+ nouvelle version vide</button>
+    ${M.versions.length > 1 ? '<button id="mv-suppr">supprimer cette version</button>' : ''}`;
+  bar.insertAdjacentElement('afterend', menu);
+  menu.querySelector('#mv-ok').addEventListener('click', async () => {
+    const nom = menu.querySelector('#mv-nom').value.trim() || va.nom;
+    M = renommerVersion(M, va.id, nom);
+    await sauverMaintenant(); dessiner();
+  });
+  menu.querySelector('#mv-garde').addEventListener('click', async () => {
+    M = nouvelleVersionDepuisGardes(M); await sauverMaintenant(); dessiner();
+  });
+  menu.querySelector('#mv-vide').addEventListener('click', async () => {
+    M = creerVersion(M); await sauverMaintenant(); dessiner();
+  });
+  const suppr = menu.querySelector('#mv-suppr');
+  if (suppr) suppr.addEventListener('click', async () => {
+    if (suppr.dataset.sure !== '1') {
+      suppr.textContent = 'confirmer la suppression';
+      suppr.dataset.sure = '1';
+      setTimeout(() => { if (suppr.isConnected) { suppr.textContent = 'supprimer cette version'; suppr.dataset.sure = ''; } }, 4000);
+      return;
+    }
+    M = supprimerVersion(M, M.versionActiveId); await sauverMaintenant(); dessiner();
+  });
+}
+
 // Vue de lecture, pour rapper : « test » (gardés + à tester) ou « scène » (gardés seuls).
 function dessinerLecture() {
-  const lignes = M.lignes.filter((l) => (vue === 'scene' ? l.valide : (l.valide || l.test)));
+  const lignes = lignesA().filter((l) => (vue === 'scene' ? l.valide : (l.valide || l.test)));
   appEl.innerHTML = `
     <div class="app-head">
       <button class="lien-retour" id="retour">← mes morceaux</button><span class="spacer"></span>
@@ -350,16 +410,17 @@ function dessinerLecture() {
   monterInstru(M.id);
 }
 
-// Glisser une ligne par sa poignée : un fantôme suit le pointeur, la ligne se
-// referme, la cible se met en valeur ; la lâcher sur une autre la range dedans.
+// Glisser une ligne par sa poignée, façon Notion : par défaut on la déplace (un
+// repère montre où elle se posera) ; en s'attardant au centre d'une ligne on la
+// range dedans ; lâcher sur la pastille ✕ ou en dehors annule.
 function attacherDrag(bloc) {
   const poignee = bloc.querySelector('.poignee');
   if (!poignee) return;
   poignee.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const sourceId = bloc.dataset.ligne;
-    const l = M.lignes.find((x) => x.id === sourceId);
-    let cibleEl = null;
+    const l = lignesA().find((x) => x.id === sourceId);
+    const conteneur = appEl.querySelector('#lignes');
 
     const ghost = document.createElement('div');
     ghost.className = 'drag-ghost';
@@ -368,41 +429,79 @@ function attacherDrag(bloc) {
     const placer = (x, y) => { ghost.style.transform = `translate(${x + 12}px, ${y - 16}px) rotate(-2deg)`; };
     placer(e.clientX, e.clientY);
 
-    const h = bloc.offsetHeight;
-    bloc.style.height = h + 'px';
-    void bloc.offsetHeight; // reflow pour amorcer la transition
+    const annuleur = document.createElement('div');
+    annuleur.className = 'drag-cancel';
+    annuleur.id = 'drag-cancel';
+    annuleur.textContent = '✕ annuler';
+    document.body.appendChild(annuleur);
+
+    const indic = document.createElement('div');
+    indic.className = 'drop-indic';
+
     bloc.classList.add('drag-source');
-    bloc.style.height = '0px';
     document.body.classList.add('drag-en-cours');
     if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     try { poignee.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 
+    let mode = 'annuler';     // 'reorder' | 'nest' | 'annuler'
+    let cibleNest = null;
+    let reorderOver = null, reorderAvant = true;
+    let hoverId = null, hoverDepuis = 0;
+
+    const clearVisu = () => {
+      if (cibleNest) { cibleNest.classList.remove('drag-cible'); cibleNest = null; }
+      if (indic.parentNode) indic.remove();
+      annuleur.classList.remove('actif');
+    };
+
     const move = (ev) => {
       placer(ev.clientX, ev.clientY);
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      if (el && el.closest('#drag-cancel')) { clearVisu(); annuleur.classList.add('actif'); mode = 'annuler'; hoverId = null; return; }
       const over = el && el.closest('.bloc-ligne');
-      const nouvelle = (over && over !== bloc) ? over : null;
-      if (cibleEl !== nouvelle) {
-        if (cibleEl) cibleEl.classList.remove('drag-cible');
-        cibleEl = nouvelle;
-        if (cibleEl) cibleEl.classList.add('drag-cible');
+      if (!over || over === bloc || !conteneur || !conteneur.contains(over)) { clearVisu(); mode = 'annuler'; hoverId = null; return; }
+      const rect = over.getBoundingClientRect();
+      const rel = (ev.clientY - rect.top) / rect.height;
+      const id = over.dataset.ligne;
+      if (hoverId !== id) { hoverId = id; hoverDepuis = performance.now(); }
+      const longHover = performance.now() - hoverDepuis > 600;
+      if (rel > 0.3 && rel < 0.7 && longHover) {
+        if (indic.parentNode) indic.remove();
+        if (cibleNest !== over) { if (cibleNest) cibleNest.classList.remove('drag-cible'); cibleNest = over; over.classList.add('drag-cible'); }
+        mode = 'nest';
+      } else {
+        if (cibleNest) { cibleNest.classList.remove('drag-cible'); cibleNest = null; }
+        reorderOver = over;
+        reorderAvant = rel < 0.5;
+        if (reorderAvant) conteneur.insertBefore(indic, over); else conteneur.insertBefore(indic, over.nextSibling);
+        mode = 'reorder';
       }
+      annuleur.classList.remove('actif');
     };
+
     const up = async () => {
       poignee.removeEventListener('pointermove', move);
       poignee.removeEventListener('pointerup', up);
       poignee.removeEventListener('pointercancel', up);
-      ghost.remove();
+      ghost.remove(); annuleur.remove();
       document.body.classList.remove('drag-en-cours');
-      const relache = cibleEl;
-      if (cibleEl) cibleEl.classList.remove('drag-cible');
-      if (relache) {
-        M = rangerDansLigne(M, sourceId, relache.dataset.ligne);
-        ouverts.add(relache.dataset.ligne);
+      const cibleId = cibleNest ? cibleNest.dataset.ligne : null;
+      const over = reorderOver;
+      const avant = reorderAvant;
+      clearVisu();
+      bloc.classList.remove('drag-source');
+      if (mode === 'nest' && cibleId) {
+        M = rangerDansLigne(M, sourceId, cibleId);
+        ouverts.add(cibleId);
         await sauverMaintenant(); dessiner();
-      } else {
-        bloc.classList.remove('drag-source');
-        bloc.style.height = '';
+      } else if (mode === 'reorder' && over) {
+        const lignes = lignesA();
+        const overIdx = lignes.findIndex((x) => x.id === over.dataset.ligne);
+        const srcIdx = lignes.findIndex((x) => x.id === sourceId);
+        let target = avant ? overIdx : overIdx + 1;
+        if (srcIdx < target) target -= 1;
+        M = deplacerLigne(M, sourceId, target);
+        await sauverMaintenant(); dessiner();
       }
     };
     poignee.addEventListener('pointermove', move);
@@ -415,9 +514,9 @@ function attacherDrag(bloc) {
 // Recalcul O(N) léger (1 lookup phonétique par ligne) à chaque frappe.
 function majPiedsEtRimes() {
   if (!M) return;
-  const textes = M.lignes.map((l) => l.texte);
+  const textes = lignesA().map((l) => l.texte);
   const groupes = surlignageActif() ? grouperRimes(textes) : textes.map(() => null);
-  M.lignes.forEach((l, i) => {
+  lignesA().forEach((l, i) => {
     const bloc = appEl.querySelector(`.bloc-ligne[data-ligne="${CSS.escape(l.id)}"]`);
     if (!bloc) return;
     const pieds = bloc.querySelector('.pieds');
