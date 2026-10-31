@@ -19,6 +19,9 @@ function messageStockage(e) {
 
 async function router() {
   const h = location.hash.slice(1);
+  if (!h.startsWith('m=')) {
+    try { const { demonterInstru } = await import('./ui-instru.js'); demonterInstru(); } catch { /* ignore */ }
+  }
   try {
     if (h.startsWith('m=')) {
       const { rendreMorceau } = await import('./ui-morceau.js');

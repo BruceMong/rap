@@ -1,6 +1,6 @@
 // Persistance locale (IndexedDB) : morceaux + coffre d'idées, et export JSON.
 const NOM = 'rap';
-const VERSION = 1;
+const VERSION = 2;
 let DB = null;
 
 export class StockageIndisponible extends Error {
@@ -18,6 +18,8 @@ export function ouvrir(idb = (typeof globalThis !== 'undefined' ? globalThis.ind
       const db = req.result;
       if (!db.objectStoreNames.contains('morceaux')) db.createObjectStore('morceaux', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('coffre')) db.createObjectStore('coffre', { keyPath: 'id' });
+      // instrus (MP3) : un par morceau, hors backup (lourd). Clé = id du morceau.
+      if (!db.objectStoreNames.contains('instrus')) db.createObjectStore('instrus', { keyPath: 'morceauId' });
     };
     req.onsuccess = () => { DB = req.result; resolve(); };
     req.onerror = () => reject(req.error);
@@ -64,8 +66,31 @@ export function sauverCoffre(idees) {
   });
 }
 
-export async function exporter() {
+// L'état complet (textes seulement, pas les instrus/MP3), pour export et backup.
+export async function etat() {
   const morceaux = await listerMorceaux();
   const coffre = await getCoffre();
-  return JSON.stringify({ version: VERSION, exporteLe: new Date().toISOString(), morceaux, coffre }, null, 2);
+  return { version: VERSION, morceaux, coffre };
+}
+
+export async function exporter() {
+  return JSON.stringify({ ...(await etat()), exporteLe: new Date().toISOString() }, null, 2);
+}
+
+// Instrus (MP3) : stockés comme ArrayBuffer + type, un par morceau. Hors backup/export.
+export async function getInstru(morceauId) {
+  return (await sur(() => attendre(store('instrus', 'readonly').get(morceauId)))) || null;
+}
+export function sauverInstru(instru) { return sur(() => attendre(store('instrus', 'readwrite').put(instru))); }
+export function supprimerInstru(morceauId) { return sur(() => attendre(store('instrus', 'readwrite').delete(morceauId))); }
+
+// Remplace entièrement les morceaux et le coffre par ceux d'un état (restauration).
+export function remplacer(e) {
+  return sur(async () => {
+    const st = store('morceaux', 'readwrite');
+    st.clear();
+    for (const m of (e.morceaux || [])) st.put(m);
+    await finTransaction(st);
+    await sauverCoffre(e.coffre || []);
+  });
 }

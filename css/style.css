@@ -171,6 +171,28 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .apropos { font-size: 13px; color: var(--muted); margin-top: 24px; text-align: center; }
 .apropos a { color: var(--accent); }
 
+.add-ligne { width: 100%; background: none; border: 1px dashed var(--line); color: var(--muted);
+  border-radius: 12px; font: inherit; font-size: 14px; padding: 11px; cursor: pointer; margin-top: 8px; }
+.add-ligne:hover { color: var(--accent); border-color: var(--accent); }
+
+.barre-instru { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding: 8px max(16px, env(safe-area-inset-left, 0px));
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 6px; }
+.instru-add { width: 100%; background: var(--fill-faint); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 10px; font: inherit; font-size: 14px; padding: 11px; cursor: pointer; }
+.instru-add:hover { color: var(--accent); }
+.instru-ligne { display: flex; align-items: center; gap: 8px; }
+.instru-btn { background: var(--fill-faint); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 8px; font: inherit; font-size: 13px; padding: 6px 10px; cursor: pointer; flex: none; }
+.instru-btn.actif { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.instru-seek { flex: 1; min-width: 0; accent-color: var(--accent); }
+.instru-temps { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.instru-temps b { color: var(--fg); }
+.instru-loop { flex-wrap: wrap; }
+.instru-nom { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .banniere-stockage { position: fixed; left: 0; right: 0; top: 0; z-index: 50;
   background: var(--sys-red, #c2410c); color: #fff; font-size: 13px; line-height: 1.4;
   padding: 10px max(16px, env(safe-area-inset-left, 0px));
