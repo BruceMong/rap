@@ -43,6 +43,18 @@ function trier(a, b) {
   return (b.epingle ? 1 : 0) - (a.epingle ? 1 : 0) || activite(b) - activite(a);
 }
 
+// Affiche la version applicative (nom du cache du service worker, p. ex. « v10 »)
+// en petit près du titre. Source unique : le SW → reflète la version réellement
+// active sur l'appareil, pratique pour vérifier qu'une mise à jour est bien passée.
+async function afficherVersion() {
+  const el = document.getElementById('app-version');
+  if (!el || !('caches' in window)) return;
+  try {
+    const cle = (await caches.keys()).find((k) => /^rap-v/.test(k));
+    if (cle) el.textContent = cle.replace('rap-', '');
+  } catch { /* ignore */ }
+}
+
 export async function rendreAccueil(app) {
   const [morceaux, coffre] = await Promise.all([listerMorceaux(), getCoffre()]);
   morceaux.sort(trier);
@@ -57,7 +69,7 @@ export async function rendreAccueil(app) {
     : '<li class="vide">Rien pour l’instant</li>';
 
   app.innerHTML = `
-    <div class="app-head"><h1>Rap</h1><span class="spacer"></span>
+    <div class="app-head"><h1>Rap</h1><span class="app-version" id="app-version"></span><span class="spacer"></span>
       <button class="icon-btn" id="btn-instrus" title="Mes instrus">♫ instrus</button>
       <button class="icon-btn" id="btn-apropos" title="À propos">i</button></div>
 
@@ -108,6 +120,7 @@ export async function rendreAccueil(app) {
 
   document.getElementById('btn-instrus').addEventListener('click', () => { location.hash = 'instrus'; });
   document.getElementById('btn-apropos').addEventListener('click', () => { location.hash = 'apropos'; });
+  afficherVersion();
   document.getElementById('coller').addEventListener('click', () => ouvrirColler(app));
 }
 
