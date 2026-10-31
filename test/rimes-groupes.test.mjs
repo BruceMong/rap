@@ -31,3 +31,19 @@ test('clé ne dépend que du dernier mot (recalcul par ligne)', () => {
 test('clé null si pas de mot final alphabétique', () => {
   assert.equal(clePhonetique('2024 !!!'), null); // Review Focus (vers sans mot)
 });
+
+test('voisins fusionnés riment : é/è, o, eu, un/in', () => {
+  // é (vérité) et è (tickets) : le cas signalé par Bruce
+  assert.equal(clePhonetique('deux tickets'), clePhonetique('moitié de vérité'));
+  // o ouvert/fermé
+  assert.equal(clePhonetique('une amazone'), clePhonetique('elle abandonne'));
+  // eu ouvert/fermé
+  assert.equal(clePhonetique('la peur'), clePhonetique('le abatteur'));
+  // un/in (fusionnés en français standard)
+  assert.equal(clePhonetique('un brun'), clePhonetique('un brin'));
+});
+
+test('ne fusionne pas les nasales entre elles (an ≠ on ≠ in)', () => {
+  assert.notEqual(clePhonetique('le temps'), clePhonetique('le pont'));
+  assert.notEqual(clePhonetique('le pont'), clePhonetique('le pain'));
+});
