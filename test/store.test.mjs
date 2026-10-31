@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   ouvrir, sauverMorceau, getMorceau, listerMorceaux,
   sauverCoffre, getCoffre, exporter, etat, remplacer,
-  getInstru, sauverInstru, supprimerInstru, StockageIndisponible,
+  getInstrus, sauverInstru, supprimerInstru, StockageIndisponible,
 } from '../js/store.js';
 
 test('ouvre et fait l’aller-retour d’un morceau', async () => {
@@ -55,15 +55,16 @@ test('etat() renvoie morceaux + coffre, remplacer() restaure tout', async () => 
   assert.equal((await getCoffre()).length, 0);
 });
 
-test('instru : aller-retour et suppression, exclu de l’état', async () => {
+test('instrus : plusieurs par morceau, exclus de l’état', async () => {
   await ouvrir();
   const buf = new TextEncoder().encode('fausse-instru').buffer;
-  await sauverInstru({ morceauId: 'm9', nom: 'beat.mp3', type: 'audio/mpeg', buf, mode: 'normal', loopA: 0, loopB: 0 });
-  const i = await getInstru('m9');
-  assert.equal(i.nom, 'beat.mp3');
-  assert.ok(i.buf);
+  await sauverInstru({ id: 'i1', morceauId: 'm9', nom: 'beat.mp3', type: 'audio/mpeg', buf, mode: 'normal', loopA: 0, loopB: 0 });
+  await sauverInstru({ id: 'i2', morceauId: 'm9', nom: 'autre.mp3', type: 'audio/mpeg', buf, mode: 'boucle', loopA: 1, loopB: 2 });
+  const list = await getInstrus('m9');
+  assert.equal(list.length, 2);
+  assert.ok(list.some((x) => x.nom === 'autre.mp3'));
   const e = await etat();
   assert.ok(!('instrus' in e)); // les MP3 ne partent pas dans la sauvegarde
-  await supprimerInstru('m9');
-  assert.equal(await getInstru('m9'), null);
+  await supprimerInstru('i1');
+  assert.equal((await getInstrus('m9')).length, 1);
 });
