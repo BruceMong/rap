@@ -1,6 +1,6 @@
 // Bootstrap + routage. Écrans chargés dynamiquement pour rester robuste pendant
 // le développement. Démarrage découplé : l'écran s'affiche, le dico suit en différé.
-import { ouvrir, StockageIndisponible } from './store.js';
+import { ouvrir, migrerBibliothequeInstrus, StockageIndisponible } from './store.js';
 import { chargerDico } from './dico.js';
 import { rendreAccueil } from './ui-accueil.js';
 
@@ -33,6 +33,11 @@ async function router() {
       await mod.rendreApropos(app);
       return;
     }
+    if (h === 'instrus') {
+      const mod = await import('./ui-instrus.js');
+      await mod.rendreInstrus(app);
+      return;
+    }
   } catch (e) {
     console.warn('écran indisponible, retour accueil', e);
   }
@@ -47,6 +52,7 @@ async function init() {
     messageStockage(e); // tout échec d'ouverture → message, jamais d'écran blanc
     return;
   }
+  await migrerBibliothequeInstrus().catch((e) => console.warn('migration instrus', e));
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }

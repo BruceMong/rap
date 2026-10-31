@@ -285,6 +285,39 @@ body.drag-en-cours .ligne-edit { pointer-events: none; }
   font: inherit; font-size: 13px; padding: 8px; cursor: pointer; }
 .instru-add2:hover { color: var(--accent); border-color: var(--accent); }
 
+.instru-pop-tit { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin: 4px 2px 0; }
+.instru-choix.faded { color: var(--muted); }
+
+/* Écran « Mes instrus » (bibliothèque) */
+.instru-cartes { display: flex; flex-direction: column; gap: 14px; }
+.instru-carte { background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.ic-tete { display: flex; align-items: center; gap: 8px; }
+.ic-nom { flex: 1; min-width: 0; background: var(--fill-faint); border: 1px solid var(--line);
+  color: var(--fg); border-radius: 8px; font: inherit; font-size: 15px; font-weight: 600; padding: 8px 10px; }
+.ic-suppr { flex: none; background: none; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 8px; font: inherit; font-size: 12px; padding: 7px 10px; cursor: pointer; }
+.ic-suppr:hover { color: var(--sys-red, #c2410c); border-color: var(--sys-red, #c2410c); }
+.ic-lecteur { display: flex; align-items: center; gap: 8px; }
+.ic-boucle { display: flex; flex-direction: column; gap: 8px; background: var(--fill-faint);
+  border-radius: 10px; padding: 10px; }
+.ic-borne { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ic-borne-l { font-weight: 600; width: 14px; flex: none; }
+.mini-nudge { padding: 6px 8px; font-size: 12px; }
+.ic-sec { width: 68px; flex: none; background: var(--surface); border: 1px solid var(--line);
+  color: var(--fg); border-radius: 8px; font: inherit; font-size: 13px; padding: 6px 8px;
+  font-variant-numeric: tabular-nums; }
+.ic-mmss { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+.ic-ecouter { align-self: flex-start; }
+.ic-source-l { display: flex; flex-direction: column; gap: 4px; font-size: 11px;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.ic-source { background: var(--fill-faint); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 8px; font: inherit; font-size: 13px; padding: 8px 10px; text-transform: none; letter-spacing: normal; }
+.ic-source-lien { color: var(--accent); font-size: 13px; text-decoration: none; }
+.ic-source-lien:hover { text-decoration: underline; }
+.ic-usage { font-size: 12px; color: var(--muted); }
+
 .banniere-stockage { position: fixed; left: 0; right: 0; top: 0; z-index: 50;
   background: var(--sys-red, #c2410c); color: #fff; font-size: 13px; line-height: 1.4;
   padding: 10px max(16px, env(safe-area-inset-left, 0px));

@@ -5,6 +5,7 @@ import {
   ouvrir, sauverMorceau, getMorceau, listerMorceaux,
   sauverCoffre, getCoffre, exporter, etat, remplacer,
   getInstrus, sauverInstru, supprimerInstru, StockageIndisponible,
+  listerInstrus, getInstru, getInstrusDuMorceau, migrerBibliothequeInstrus,
 } from '../js/store.js';
 
 test('ouvre et fait l’aller-retour d’un morceau', async () => {
@@ -67,4 +68,30 @@ test('instrus : plusieurs par morceau, exclus de l’état', async () => {
   assert.ok(!('instrus' in e)); // les MP3 ne partent pas dans la sauvegarde
   await supprimerInstru('i1');
   assert.equal((await getInstrus('m9')).length, 1);
+});
+
+test('bibliothèque : un instru partagé par deux morceaux, lu via getInstrusDuMorceau', async () => {
+  await ouvrir();
+  const buf = new TextEncoder().encode('x').buffer;
+  await sauverInstru({ id: 'lib1', nom: 'solo.mp3', type: 'audio/mpeg', buf, mode: 'normal', loopA: 0, loopB: 0, morceauIds: ['mA', 'mB'] });
+  const tous = await listerInstrus();
+  assert.ok(tous.some((x) => x.id === 'lib1'));
+  assert.equal((await getInstru('lib1')).nom, 'solo.mp3');
+  assert.ok((await getInstrusDuMorceau('mA')).some((x) => x.id === 'lib1'));
+  assert.ok((await getInstrusDuMorceau('mB')).some((x) => x.id === 'lib1'));
+  assert.equal((await getInstrusDuMorceau('mZ')).length, 0);
+});
+
+test('migration : instru legacy (morceauId) → morceauIds, idempotent', async () => {
+  await ouvrir();
+  const buf = new TextEncoder().encode('x').buffer;
+  await sauverInstru({ id: 'g1', morceauId: 'mg1', nom: 'a.mp3', type: 'audio/mpeg', buf, mode: 'normal', loopA: 0, loopB: 0 });
+
+  await migrerBibliothequeInstrus();
+  const g = await getInstru('g1');
+  assert.deepEqual(g.morceauIds, ['mg1']);
+  assert.equal(g.morceauId, undefined); // ancien champ effacé
+
+  await migrerBibliothequeInstrus(); // 2e passage : ne touche à rien
+  assert.deepEqual((await getInstru('g1')).morceauIds, ['mg1']);
 });

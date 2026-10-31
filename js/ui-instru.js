@@ -1,11 +1,14 @@
 // Lecteur d'instru d'un morceau : barre fixe en bas (hors zone redessinée).
-// Plusieurs instrus par morceau avec sélecteur ; mode normal ou boucle A–B.
-import { getInstrus, sauverInstru, supprimerInstru } from './store.js';
+// Les instrus vivent dans une bibliothèque partagée (store `instrus`) ; un morceau
+// y pioche via instru.morceauIds. Le réglage de boucle vit sur l'instru, donc il
+// est le même partout où l'instru est utilisé. Réglage fin : écran « Instrus ».
+import { listerInstrus, getInstrusDuMorceau, sauverInstru, supprimerInstru } from './store.js';
 import { uid } from './model.js';
 import { esc } from './ui-util.js';
 
 let courantId = null; // morceauId
-let liste = [];        // instrus du morceau
+let liste = [];        // instrus attribués à ce morceau
+let biblio = [];       // toute la bibliothèque
 let instru = null;     // instru actif
 let audio = null;
 let url = null;
@@ -24,11 +27,15 @@ function fmt(s) {
 }
 function sauvegarder() { if (instru) sauverInstru(instru).catch(() => {}); }
 
+async function recharger() {
+  [liste, biblio] = await Promise.all([getInstrusDuMorceau(courantId), listerInstrus()]);
+}
+
 export async function monterInstru(morceauId) {
   if (courantId === morceauId && document.getElementById('barre-instru')) return;
   demonterInstru();
   courantId = morceauId;
-  liste = await getInstrus(morceauId);
+  await recharger();
   const actifId = lireActif(morceauId);
   instru = liste.find((i) => i.id === actifId) || liste[0] || null;
   if (instru) ecrireActif(morceauId, instru.id);
@@ -37,7 +44,7 @@ export async function monterInstru(morceauId) {
 
 export function demonterInstru() {
   resetAudio();
-  instru = null; liste = []; courantId = null;
+  instru = null; liste = []; biblio = []; courantId = null;
   const b = document.getElementById('barre-instru');
   if (b) b.remove();
 }
@@ -52,11 +59,14 @@ async function chargerFichier(e) {
   const f = e.target.files[0];
   if (!f) return;
   const buf = await f.arrayBuffer();
-  const nouv = { id: uid(), morceauId: courantId, nom: f.name, type: f.type || 'audio/mpeg', buf, mode: 'normal', loopA: 0, loopB: 0 };
+  const nouv = {
+    id: uid(), morceauIds: [courantId], nom: f.name, type: f.type || 'audio/mpeg',
+    buf, mode: 'normal', loopA: 0, loopB: 0, source: '', creeLe: Date.now(),
+  };
   await sauverInstru(nouv);
-  liste.push(nouv);
-  instru = nouv;
-  ecrireActif(courantId, nouv.id);
+  await recharger();
+  instru = liste.find((i) => i.id === nouv.id) || nouv;
+  ecrireActif(courantId, instru.id);
   resetAudio();
   rendre();
 }
@@ -70,10 +80,25 @@ function changerActif(id) {
   rendre();
 }
 
-async function supprimer(id) {
+// Attribue à ce morceau un instru déjà présent dans la bibliothèque.
+async function attribuer(id) {
+  const i = biblio.find((x) => x.id === id);
+  if (!i) return;
+  if (!Array.isArray(i.morceauIds)) i.morceauIds = [];
+  if (!i.morceauIds.includes(courantId)) { i.morceauIds.push(courantId); await sauverInstru(i); }
+  await recharger();
+  changerActif(id);
+}
+
+// Détache l'instru de CE morceau (il reste dans la bibliothèque).
+async function detacher(id) {
   if (instru && instru.id === id) resetAudio();
-  await supprimerInstru(id).catch(() => {});
-  liste = liste.filter((x) => x.id !== id);
+  const i = biblio.find((x) => x.id === id);
+  if (i) {
+    i.morceauIds = (i.morceauIds || []).filter((m) => m !== courantId);
+    await sauverInstru(i);
+  }
+  await recharger();
   if (!instru || instru.id === id) {
     instru = liste[0] || null;
     ecrireActif(courantId, instru ? instru.id : null);
@@ -107,10 +132,14 @@ function rendre() {
   if (!b) { b = document.createElement('div'); b.id = 'barre-instru'; b.className = 'barre-instru'; document.body.appendChild(b); }
 
   if (!instru) {
+    const aBiblio = biblio.length > 0;
     b.innerHTML = '<button class="instru-add" id="instru-add">♫ ajouter un instru</button>'
+      + (aBiblio ? '<button class="instru-nom" id="choisir" title="choisir dans ma bibliothèque">depuis ma bibliothèque ▾</button>' : '')
       + '<input type="file" id="instru-file" accept="audio/*" hidden>';
     b.querySelector('#instru-add').onclick = () => b.querySelector('#instru-file').click();
     b.querySelector('#instru-file').onchange = chargerFichier;
+    const ch = b.querySelector('#choisir');
+    if (ch) ch.onclick = ouvrirSelecteur;
     return;
   }
 
@@ -159,28 +188,44 @@ function ouvrirSelecteur() {
   if (document.getElementById('instru-pop')) { fermerSelecteur(); return; }
   const b = document.getElementById('barre-instru');
   if (!b) return;
+  const attribues = liste;
+  const attribuesIds = new Set(attribues.map((i) => i.id));
+  const autres = biblio.filter((i) => !attribuesIds.has(i.id));
+
+  const itemAttribue = (i) => `<div class="instru-item${instru && i.id === instru.id ? ' actif' : ''}">
+      <button class="instru-choix" data-choix="${esc(i.id)}">${esc(i.nom)}</button>
+      <button class="instru-suppr" data-detach="${esc(i.id)}" title="retirer de ce morceau">✕</button>
+    </div>`;
+  const itemAutre = (i) => `<div class="instru-item">
+      <button class="instru-choix faded" data-attr="${esc(i.id)}" title="ajouter à ce morceau">${esc(i.nom)}</button>
+      <button class="instru-suppr" data-attr="${esc(i.id)}" title="ajouter à ce morceau">+</button>
+    </div>`;
+
   const pop = document.createElement('div');
   pop.className = 'instru-pop';
   pop.id = 'instru-pop';
-  pop.innerHTML = liste.map((i) => `<div class="instru-item${instru && i.id === instru.id ? ' actif' : ''}">
-      <button class="instru-choix" data-choix="${esc(i.id)}">${esc(i.nom)}</button>
-      <button class="instru-suppr" data-suppr="${esc(i.id)}" title="supprimer">✕</button>
-    </div>`).join('')
-    + '<button class="instru-add2" id="pop-add">+ ajouter un instru</button>'
+  pop.innerHTML =
+    (attribues.length ? '<div class="instru-pop-tit">Dans ce morceau</div>' + attribues.map(itemAttribue).join('') : '')
+    + (autres.length ? '<div class="instru-pop-tit">Ma bibliothèque</div>' + autres.map(itemAutre).join('') : '')
+    + '<button class="instru-add2" id="pop-add">+ importer un instru</button>'
+    + '<button class="instru-add2" id="pop-biblio">⚙ régler mes instrus</button>'
     + '<input type="file" id="pop-file" accept="audio/*" hidden>';
   b.insertAdjacentElement('afterbegin', pop);
-  pop.querySelectorAll('[data-choix]').forEach((btn) => btn.addEventListener('click', () => changerActif(btn.dataset.choix)));
-  pop.querySelectorAll('[data-suppr]').forEach((btn) => btn.addEventListener('click', () => {
+
+  pop.querySelectorAll('[data-choix]').forEach((btn) => btn.addEventListener('click', () => { fermerSelecteur(); changerActif(btn.dataset.choix); }));
+  pop.querySelectorAll('[data-attr]').forEach((btn) => btn.addEventListener('click', () => { fermerSelecteur(); attribuer(btn.dataset.attr); }));
+  pop.querySelectorAll('[data-detach]').forEach((btn) => btn.addEventListener('click', () => {
     if (btn.dataset.sure !== '1') {
       btn.textContent = 'sûr ?';
       btn.dataset.sure = '1';
       setTimeout(() => { if (btn.isConnected) { btn.textContent = '✕'; btn.dataset.sure = ''; } }, 3500);
       return;
     }
-    supprimer(btn.dataset.suppr);
+    detacher(btn.dataset.detach);
   }));
   pop.querySelector('#pop-add').onclick = () => pop.querySelector('#pop-file').click();
   pop.querySelector('#pop-file').onchange = chargerFichier;
+  pop.querySelector('#pop-biblio').onclick = () => { location.hash = 'instrus'; };
 }
 
 function peindre() {

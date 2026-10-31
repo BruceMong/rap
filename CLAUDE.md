@@ -30,12 +30,23 @@ rime en couleur.
   Pattern du carnet FitTracking. Sauvegarde auto débouncée + restauration (écran À propos).
 - **Textes seulement** (morceaux + coffre) : les MP3 ne partent pas dans le cloud.
 
-## Lecteur d'instru (v2)
+## Lecteur d'instru + bibliothèque (v2/v3)
 
-- Un MP3 par morceau, stocké en IndexedDB (store `instrus`, clé = id du morceau),
-  **hors backup/export** — `js/ui-instru.js`.
-- Barre de lecture fixe **hors de `#app`** (ne se recrée pas au redessin, donc la
-  lecture ne se coupe pas). Mode normal (tout en boucle) ou **boucle A-B** persistée.
+- **Bibliothèque partagée** d'instrus (store IndexedDB `instrus`, keyPath `id`),
+  **hors backup/export**. Un instru = `{ id, nom, type, buf, mode, loopA, loopB,
+  source?, morceauIds:[], creeLe }`. L'attribution (quels morceaux l'utilisent) et
+  le réglage de boucle vivent **sur l'instru** → partagés par tous les morceaux qui
+  l'utilisent, et jamais écrasés par la sauvegarde débouncée de l'éditeur de texte.
+- Écran **« Mes instrus »** (`#instrus`, `js/ui-instrus.js`) : importer, renommer,
+  régler la boucle A–B finement (champs mm:ss.d, nudges ±0,1/±1 s, « ici »,
+  « écouter la boucle »), noter un lien source (note cliquable, **aucun
+  téléchargement** — pas de download YouTube in-app, cf. workflow yt-dlp local),
+  voir l'usage, supprimer.
+- Barre de lecture du morceau (`js/ui-instru.js`) fixe **hors de `#app`** (ne se
+  recrée pas au redessin). Son menu (nom ▾) liste les instrus du morceau + la
+  bibliothèque pour attribuer/détacher/importer. Mode normal ou **boucle A-B**.
+- Migration auto au démarrage (`migrerBibliothequeInstrus`, `app.js`) : ancien
+  `instru.morceauId` (singulier) → `instru.morceauIds` (liste). Idempotent.
 
 ## État
 

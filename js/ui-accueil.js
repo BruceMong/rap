@@ -58,6 +58,7 @@ export async function rendreAccueil(app) {
 
   app.innerHTML = `
     <div class="app-head"><h1>Rap</h1><span class="spacer"></span>
+      <button class="icon-btn" id="btn-instrus" title="Mes instrus">♫ instrus</button>
       <button class="icon-btn" id="btn-apropos" title="À propos">i</button></div>
 
     <div class="sect-label">Coffre à idées</div>
@@ -105,6 +106,7 @@ export async function rendreAccueil(app) {
     btn.addEventListener('click', () => choisirDestination(app, coffre, btn.dataset.id, morceaux));
   });
 
+  document.getElementById('btn-instrus').addEventListener('click', () => { location.hash = 'instrus'; });
   document.getElementById('btn-apropos').addEventListener('click', () => { location.hash = 'apropos'; });
   document.getElementById('coller').addEventListener('click', () => ouvrirColler(app));
 }

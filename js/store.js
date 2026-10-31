@@ -82,7 +82,24 @@ export async function exporter() {
   return JSON.stringify({ ...(await etat()), exporteLe: new Date().toISOString() }, null, 2);
 }
 
-// Instrus (MP3, ArrayBuffer + type) : plusieurs par morceau. Hors backup/export.
+// Instrus (MP3, ArrayBuffer + type) : bibliothèque partagée, hors backup/export.
+// Un instru = { id, nom, type, buf, mode, loopA, loopB, source?, morceauIds:[], creeLe? }.
+// L'attribution (quels morceaux l'utilisent) vit SUR l'instru (morceauIds), pas
+// sur le morceau : les instrus sont écrits seulement d'ici, donc jamais écrasés
+// par la sauvegarde débouncée de l'éditeur de texte. Le réglage de boucle vit
+// aussi sur l'instru → partagé par tous les morceaux qui l'utilisent.
+export function listerInstrus() { return sur(() => attendre(store('instrus', 'readonly').getAll())); }
+export function getInstru(id) { return sur(() => attendre(store('instrus', 'readonly').get(id))); }
+export function sauverInstru(instru) { return sur(() => attendre(store('instrus', 'readwrite').put(instru))); }
+export function supprimerInstru(id) { return sur(() => attendre(store('instrus', 'readwrite').delete(id))); }
+
+// Instrus attribués à un morceau (lus depuis la bibliothèque).
+export async function getInstrusDuMorceau(morceauId) {
+  return (await listerInstrus()).filter((i) => (i.morceauIds || []).includes(morceauId));
+}
+
+// Legacy : ancien index « un instru par morceau » (sert à la rétrocompat des
+// données pas encore migrées). Remplacé par getInstrusDuMorceau.
 export function getInstrus(morceauId) {
   return sur(() => new Promise((res, rej) => {
     const req = store('instrus', 'readonly').index('parMorceau').getAll(IDBKeyRange.only(morceauId));
@@ -90,8 +107,19 @@ export function getInstrus(morceauId) {
     req.onerror = () => rej(req.error);
   }));
 }
-export function sauverInstru(instru) { return sur(() => attendre(store('instrus', 'readwrite').put(instru))); }
-export function supprimerInstru(id) { return sur(() => attendre(store('instrus', 'readwrite').delete(id))); }
+
+// Migration v2/v3 → bibliothèque : l'ancien champ instru.morceauId (singulier,
+// un seul morceau) devient instru.morceauIds (liste). Idempotent : un instru déjà
+// migré (plus de morceauId) est ignoré.
+export async function migrerBibliothequeInstrus() {
+  const aMigrer = (await listerInstrus()).filter((i) => i.morceauId && !i.morceauIds);
+  if (!aMigrer.length) return;
+  for (const i of aMigrer) {
+    i.morceauIds = [i.morceauId];
+    delete i.morceauId;
+    await sauverInstru(i);
+  }
+}
 
 // Remplace entièrement les morceaux et le coffre par ceux d'un état (restauration).
 export function remplacer(e) {
