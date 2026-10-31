@@ -2,8 +2,8 @@
 // imbrication, validation (jaune), brouillons détachés. Persistance débouncée.
 import { getMorceau, sauverMorceau } from './store.js';
 import {
-  ajouterLigne, modifierLigne, basculerValide, supprimerLigne, ajouterPlacard,
-  rangerDansLigne, uid,
+  ajouterLigne, modifierLigne, basculerValide, basculerTest, supprimerLigne, ajouterPlacard,
+  rangerDansLigne, insererLigneApres, uid,
 } from './model.js';
 import { esc, autoGrow, alerteStockage } from './ui-util.js';
 import { compterPieds } from './syllabes.js';
@@ -18,7 +18,14 @@ let appEl = null;
 const ouverts = new Set(); // ids de lignes dont le placard est déplié
 let timer = null;
 let cible = null;          // { id, pos } : dernier curseur dans une ligne (cible d'insertion)
-let scene = false;         // mode « scène » : n'affiche que les lignes validées
+let vue = 'edition';       // 'edition' | 'test' (jaune+vert) | 'scene' (jaune seul)
+
+const ORDRE_VUE = ['edition', 'test', 'scene'];
+const LABEL_VUE = { edition: 'édition', test: 'test', scene: 'scène' };
+function cyclerVue() {
+  vue = ORDRE_VUE[(ORDRE_VUE.indexOf(vue) + 1) % ORDRE_VUE.length];
+  dessiner();
+}
 
 function sauverBientot() {
   clearTimeout(timer);
@@ -66,7 +73,9 @@ export async function rendreMorceau(app, id) {
   appEl = app;
   M = await getMorceau(id);
   if (!M) { location.hash = ''; return; }
-  scene = false;
+  M.ouvertLe = Date.now();
+  sauverMorceau(M).catch(() => {}); // remonte le morceau en tête de l'accueil
+  vue = 'edition';
   fermerPanneau();
   installerFlush();
   dessiner();
@@ -86,21 +95,21 @@ function essaiHTML(idee) {
 function ligneHTML(l) {
   const ouvert = ouverts.has(l.id) ? ' ouvert' : '';
   const np = l.placards.length;
+  const etat = l.valide ? ' valide' : (l.test ? ' test' : '');
   const placard = `<div class="placard"><div class="placard-in"><div class="placard-pad">
       ${l.placards.map(essaiHTML).join('')}
       <button class="add-essai" data-ligne="${esc(l.id)}">+ un essai</button>
     </div></div></div>`;
   return `<div class="bloc-ligne${ouvert}" data-ligne="${esc(l.id)}">
-      <div class="ligne-row${l.valide ? ' valide' : ''}">
+      <div class="ligne-row${etat}">
         <span class="poignee" title="glisser pour ranger dans une autre ligne">⠿</span>
         <span class="pieds" data-pieds="${esc(l.id)}"></span>
         <textarea class="ligne-edit" rows="1" data-ligne="${esc(l.id)}" placeholder="écris un vers…">${esc(l.texte)}</textarea>
         <span class="ligne-actions">
-          <button class="mini toggle-placard" data-ligne="${esc(l.id)}" title="brouillons">
-            <span class="chevron">›</span>${np ? np : ''}</button>
-          <button class="mini" data-rimes="${esc(l.id)}" title="chercher des rimes">♪</button>
-          <button class="mini ${l.valide ? 'actif' : ''}" data-valide="${esc(l.id)}" title="validé">✓</button>
-          <button class="mini" data-del="${esc(l.id)}" title="supprimer la ligne">✕</button>
+          <button class="mini toggle-placard${np ? ' aPlacard' : ''}" data-ligne="${esc(l.id)}" title="brouillons">
+            <span class="chevron">›</span>${np ? `<span class="badge">${np}</span>` : ''}</button>
+          <button class="mini ${l.valide ? 'actif' : ''}" data-valide="${esc(l.id)}" title="garder (jaune)">✓</button>
+          <button class="mini" data-menu-ligne="${esc(l.id)}" title="plus d’actions">⋯</button>
         </span>
       </div>
       ${placard}
@@ -108,7 +117,7 @@ function ligneHTML(l) {
 }
 
 function dessiner() {
-  if (scene) { dessinerScene(); return; }
+  if (vue !== 'edition') { dessinerLecture(); return; }
   const detaches = M.detaches.length ? `
     <div class="sect-label">Brouillons détachés</div>
     <div class="detaches"><div class="placard-pad">
@@ -119,7 +128,7 @@ function dessiner() {
     <div class="app-head">
       <button class="lien-retour" id="retour">← mes morceaux</button><span class="spacer"></span>
       <button class="icon-btn ${surlignageActif() ? 'actif' : ''}" id="rimes" title="surlignage des rimes">rimes</button>
-      <button class="icon-btn" id="scene" title="ne montrer que les vers validés">scène</button>
+      <button class="icon-btn" id="vue" title="changer de vue (édition / test / scène)">${LABEL_VUE[vue]}</button>
       <button class="icon-btn" id="statut">${M.statut === 'fini' ? '✓ fini' : 'en cours'}</button>
     </div>
     <input class="titre-morceau" id="titre" placeholder="Titre du morceau" value="${esc(M.titre)}">
@@ -143,7 +152,7 @@ function dessiner() {
     e.currentTarget.classList.toggle('actif', actif);
     majPiedsEtRimes();
   });
-  document.getElementById('scene').addEventListener('click', () => { scene = true; dessiner(); });
+  document.getElementById('vue').addEventListener('click', cyclerVue);
   const titre = document.getElementById('titre');
   titre.addEventListener('input', () => { M.titre = titre.value; sauverBientot(); });
 
@@ -170,10 +179,9 @@ function dessiner() {
     });
   });
 
-  appEl.querySelectorAll('[data-rimes]').forEach((b) => b.addEventListener('click', () => {
-    const l = M.lignes.find((x) => x.id === b.dataset.rimes);
-    const mot = dernierMotDe(l ? l.texte : '');
-    if (mot) ouvrirPanneauRimes(mot);
+  appEl.querySelectorAll('[data-menu-ligne]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    ouvrirMenuLigne(b.dataset.menuLigne, b.closest('.bloc-ligne'));
   }));
 
   // essais
@@ -194,10 +202,6 @@ function dessiner() {
   }));
   appEl.querySelectorAll('[data-valide]').forEach((b) => b.addEventListener('click', async () => {
     M = basculerValide(M, b.dataset.valide);
-    await sauverMaintenant(); dessiner();
-  }));
-  appEl.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
-    M = supprimerLigne(M, b.dataset.del);
     await sauverMaintenant(); dessiner();
   }));
   appEl.querySelectorAll('.add-essai').forEach((b) => b.addEventListener('click', async () => {
@@ -233,6 +237,41 @@ function trouverEssai(id) {
 function supprimerEssai(id) {
   for (const l of M.lignes) { if (retirerIdee(l.placards, id)) return; }
   retirerIdee(M.detaches, id);
+}
+
+// Menu compact d'une ligne : à tester (vert), rimes, insérer dessous, supprimer.
+function ouvrirMenuLigne(id, bloc) {
+  if (!bloc) return;
+  const ex = bloc.querySelector('.menu-ligne');
+  if (ex) { ex.remove(); return; }
+  const l = M.lignes.find((x) => x.id === id);
+  if (!l) return;
+  const menu = document.createElement('div');
+  menu.className = 'menu-ligne';
+  menu.innerHTML = `
+    <button data-a="test" class="${l.test ? 'actif' : ''}">à tester</button>
+    <button data-a="rimes">rimes ♪</button>
+    <button data-a="inserer">insérer dessous</button>
+    <button data-a="suppr">supprimer</button>`;
+  bloc.querySelector('.ligne-row').insertAdjacentElement('afterend', menu);
+  menu.querySelector('[data-a="test"]').addEventListener('click', async () => {
+    M = basculerTest(M, id); await sauverMaintenant(); dessiner();
+  });
+  menu.querySelector('[data-a="rimes"]').addEventListener('click', () => {
+    menu.remove();
+    const mot = dernierMotDe(l.texte);
+    if (mot) ouvrirPanneauRimes(mot);
+  });
+  menu.querySelector('[data-a="inserer"]').addEventListener('click', async () => {
+    M = insererLigneApres(M, id, '');
+    await sauverMaintenant(); dessiner();
+    const bl = appEl.querySelector(`.bloc-ligne[data-ligne="${CSS.escape(id)}"]`);
+    const ta = bl && bl.nextElementSibling && bl.nextElementSibling.querySelector('.ligne-edit');
+    if (ta) ta.focus();
+  });
+  menu.querySelector('[data-a="suppr"]').addEventListener('click', async () => {
+    M = supprimerLigne(M, id); await sauverMaintenant(); dessiner();
+  });
 }
 
 // --- panneau de rimes (Task 13) ---
@@ -291,39 +330,55 @@ function ouvrirPanneauRimes(mot) {
   if (dicoPret()) remplir(); else chargerDico().then(remplir).catch(() => {});
 }
 
-// Mode « scène » : lecture propre des seules lignes validées, pour rapper.
-function dessinerScene() {
-  const validees = M.lignes.filter((l) => l.valide);
+// Vue de lecture, pour rapper : « test » (gardés + à tester) ou « scène » (gardés seuls).
+function dessinerLecture() {
+  const lignes = M.lignes.filter((l) => (vue === 'scene' ? l.valide : (l.valide || l.test)));
   appEl.innerHTML = `
     <div class="app-head">
       <button class="lien-retour" id="retour">← mes morceaux</button><span class="spacer"></span>
-      <button class="icon-btn actif" id="scene-off" title="revenir à l'édition">scène</button>
+      <button class="icon-btn actif" id="vue" title="changer de vue">${LABEL_VUE[vue]}</button>
     </div>
     <h1 class="scene-titre">${esc(M.titre || 'Sans titre')}</h1>
-    ${validees.length
-      ? `<div class="scene-texte">${validees.map((l) => `<p>${esc(l.texte)}</p>`).join('')}</div>`
-      : '<p class="vide">Valide des vers avec ✓ en mode édition pour les retrouver ici.</p>'}
+    ${lignes.length
+      ? `<div class="scene-texte">${lignes.map((l) => `<p class="${l.valide ? 'garde' : 'test'}">${esc(l.texte)}</p>`).join('')}</div>`
+      : `<p class="vide">${vue === 'scene' ? 'Aucun vers gardé (✓).' : 'Aucun vers gardé ou à tester.'}</p>`}
   `;
   document.getElementById('retour').addEventListener('click', async () => {
     await sauverMaintenant(); demonterInstru(); location.hash = '';
   });
-  document.getElementById('scene-off').addEventListener('click', () => { scene = false; dessiner(); });
+  document.getElementById('vue').addEventListener('click', cyclerVue);
   monterInstru(M.id);
 }
 
-// Glisser une ligne (par sa poignée) et la lâcher sur une autre : la ranger dedans.
+// Glisser une ligne par sa poignée : un fantôme suit le pointeur, la ligne se
+// referme, la cible se met en valeur ; la lâcher sur une autre la range dedans.
 function attacherDrag(bloc) {
   const poignee = bloc.querySelector('.poignee');
   if (!poignee) return;
   poignee.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     const sourceId = bloc.dataset.ligne;
+    const l = M.lignes.find((x) => x.id === sourceId);
     let cibleEl = null;
+
+    const ghost = document.createElement('div');
+    ghost.className = 'drag-ghost';
+    ghost.textContent = (l && l.texte.trim()) ? l.texte : '(vide)';
+    document.body.appendChild(ghost);
+    const placer = (x, y) => { ghost.style.transform = `translate(${x + 12}px, ${y - 16}px) rotate(-2deg)`; };
+    placer(e.clientX, e.clientY);
+
+    const h = bloc.offsetHeight;
+    bloc.style.height = h + 'px';
+    void bloc.offsetHeight; // reflow pour amorcer la transition
     bloc.classList.add('drag-source');
+    bloc.style.height = '0px';
     document.body.classList.add('drag-en-cours');
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
     try { poignee.setPointerCapture(e.pointerId); } catch { /* ignore */ }
 
     const move = (ev) => {
+      placer(ev.clientX, ev.clientY);
       const el = document.elementFromPoint(ev.clientX, ev.clientY);
       const over = el && el.closest('.bloc-ligne');
       const nouvelle = (over && over !== bloc) ? over : null;
@@ -337,7 +392,7 @@ function attacherDrag(bloc) {
       poignee.removeEventListener('pointermove', move);
       poignee.removeEventListener('pointerup', up);
       poignee.removeEventListener('pointercancel', up);
-      bloc.classList.remove('drag-source');
+      ghost.remove();
       document.body.classList.remove('drag-en-cours');
       const relache = cibleEl;
       if (cibleEl) cibleEl.classList.remove('drag-cible');
@@ -345,6 +400,9 @@ function attacherDrag(bloc) {
         M = rangerDansLigne(M, sourceId, relache.dataset.ligne);
         ouverts.add(relache.dataset.ligne);
         await sauverMaintenant(); dessiner();
+      } else {
+        bloc.classList.remove('drag-source');
+        bloc.style.height = '';
       }
     };
     poignee.addEventListener('pointermove', move);

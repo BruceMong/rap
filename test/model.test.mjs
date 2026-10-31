@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   creerMorceau, ajouterLigne, modifierLigne, basculerValide,
   supprimerLigne, ajouterPlacard, envoyerIdeeVersMorceau, morceauDepuisTexte,
-  rangerDansLigne,
+  rangerDansLigne, basculerTest, insererLigneApres,
 } from '../js/model.js';
 
 test('creerMorceau : en cours, sans ligne ni détaché', () => {
@@ -69,6 +69,29 @@ test('morceauDepuisTexte : une ligne (en travaux) par ligne non vide', () => {
   assert.equal(m.lignes[1].texte, 'Ligne deux');
   assert.equal(m.lignes[0].valide, false);
   assert.ok(m.lignes[0].id && m.lignes[1].id !== m.lignes[0].id);
+});
+
+test('basculerTest met l’état à tester (vert) et retire validé', () => {
+  let m = ajouterLigne(creerMorceau('t'), 'a');
+  const id = m.lignes[0].id;
+  m = basculerValide(m, id);          // jaune
+  assert.equal(m.lignes[0].valide, true);
+  m = basculerTest(m, id);            // passe en vert → retire jaune
+  assert.equal(m.lignes[0].test, true);
+  assert.equal(m.lignes[0].valide, false);
+  m = basculerValide(m, id);          // repasse jaune → retire vert
+  assert.equal(m.lignes[0].valide, true);
+  assert.equal(m.lignes[0].test, false);
+});
+
+test('insererLigneApres : nouvelle ligne juste après la cible', () => {
+  let m = ajouterLigne(ajouterLigne(creerMorceau('t'), 'A'), 'C');
+  const [a] = m.lignes;
+  m = insererLigneApres(m, a.id, 'B');
+  assert.equal(m.lignes.length, 3);
+  assert.equal(m.lignes[0].texte, 'A');
+  assert.equal(m.lignes[1].texte, 'B');
+  assert.equal(m.lignes[2].texte, 'C');
 });
 
 test('rangerDansLigne : la source devient un essai de la cible, retirée des lignes', () => {
