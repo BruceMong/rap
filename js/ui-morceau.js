@@ -9,6 +9,8 @@ import { compterPieds } from './syllabes.js';
 import { grouperRimes, trouverRimes } from './rimes.js';
 import { chargerDico, dicoPret } from './dico.js';
 import { surlignageActif, basculerSurlignage } from './reglages.js';
+import { planifier as planifierBackup } from './backup.js';
+import { monterInstru, demonterInstru } from './ui-instru.js';
 
 let M = null;            // morceau courant (état de l'écran)
 let appEl = null;
@@ -18,13 +20,18 @@ let cible = null;          // { id, pos } : dernier curseur dans une ligne (cibl
 
 function sauverBientot() {
   clearTimeout(timer);
-  timer = setTimeout(() => { M.modifieLe = Date.now(); sauverMorceau(M).catch(alerteStockage); }, 400);
+  timer = setTimeout(() => {
+    M.modifieLe = Date.now();
+    sauverMorceau(M).catch(alerteStockage);
+    planifierBackup();
+  }, 400);
 }
 async function sauverMaintenant() {
   clearTimeout(timer);
   if (!M) return;
   M.modifieLe = Date.now();
   try { await sauverMorceau(M); } catch { alerteStockage(); }
+  planifierBackup();
 }
 
 // Flush de la saisie débouncée quand l'app passe en arrière-plan (OS peut geler
@@ -111,11 +118,15 @@ function dessiner() {
     </div>
     <input class="titre-morceau" id="titre" placeholder="Titre du morceau" value="${esc(M.titre)}">
     <div class="lignes" id="lignes">${M.lignes.map(ligneHTML).join('')}</div>
+    <button class="add-ligne" id="add-ligne">+ une ligne</button>
     ${detaches}
-    <div class="fab"><button id="add-ligne">+ une ligne</button></div>
   `;
 
-  document.getElementById('retour').addEventListener('click', async () => { await sauverMaintenant(); location.hash = ''; });
+  document.getElementById('retour').addEventListener('click', async () => {
+    await sauverMaintenant();
+    demonterInstru();
+    location.hash = '';
+  });
   document.getElementById('statut').addEventListener('click', async () => {
     M.statut = M.statut === 'fini' ? 'en_cours' : 'fini';
     await sauverMaintenant(); dessiner();
@@ -200,6 +211,8 @@ function dessiner() {
   majPiedsEtRimes();
   // Rafraîchit une fois le dico chargé en différé (valeurs d'abord via G2P).
   chargerDico().then(majPiedsEtRimes).catch(() => {});
+  // Barre d'instru (hors #app, ne se recrée pas à chaque redessin).
+  monterInstru(M.id);
 }
 
 // Cherche/supprime un essai dans les vraies listes (placards de lignes + détachés).

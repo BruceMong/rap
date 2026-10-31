@@ -2,6 +2,7 @@
 import { listerMorceaux, getCoffre, sauverCoffre, sauverMorceau, getMorceau } from './store.js';
 import { creerMorceau, envoyerIdeeVersMorceau, uid } from './model.js';
 import { esc, dateRelative, alerteStockage } from './ui-util.js';
+import { planifier as planifierBackup } from './backup.js';
 
 function apercu(m) {
   const l = (m.lignes || []).find((x) => x.texte && x.texte.trim());
@@ -68,6 +69,7 @@ export async function rendreAccueil(app) {
   document.getElementById('nouveau').addEventListener('click', async () => {
     const m = creerMorceau('');
     try { await sauverMorceau(m); } catch { alerteStockage(); return; }
+    planifierBackup();
     location.hash = 'm=' + m.id;
   });
 
@@ -92,6 +94,7 @@ function ajouterIdee(app, coffre) {
     if (!texte) { li.remove(); return; }
     coffre.push({ id: uid(), texte, enfants: [] });
     try { await sauverCoffre(coffre); } catch { alerteStockage(); return; }
+    planifierBackup();
     rendreAccueil(app);
   };
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); input.blur(); } });
@@ -113,6 +116,7 @@ function choisirDestination(app, coffre, ideeId, morceaux) {
       const r = envoyerIdeeVersMorceau(coffre, ideeId, m);
       try { await sauverCoffre(r.coffre); await sauverMorceau(r.morceau); }
       catch { alerteStockage(); return; }
+      planifierBackup();
       location.hash = 'm=' + m.id;
     });
   });
