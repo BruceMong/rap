@@ -1,6 +1,6 @@
 // Persistance locale (IndexedDB) : morceaux + coffre d'idées, et export JSON.
 const NOM = 'rap';
-const VERSION = 2;
+const VERSION = 3;
 let DB = null;
 
 export class StockageIndisponible extends Error {
@@ -14,12 +14,17 @@ export function ouvrir(idb = (typeof globalThis !== 'undefined' ? globalThis.ind
   return new Promise((resolve, reject) => {
     if (!idb) { reject(new StockageIndisponible()); return; }
     const req = idb.open(NOM, VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
       if (!db.objectStoreNames.contains('morceaux')) db.createObjectStore('morceaux', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('coffre')) db.createObjectStore('coffre', { keyPath: 'id' });
-      // instrus (MP3) : un par morceau, hors backup (lourd). Clé = id du morceau.
-      if (!db.objectStoreNames.contains('instrus')) db.createObjectStore('instrus', { keyPath: 'morceauId' });
+      // instrus (MP3, hors backup) : v3 → plusieurs par morceau. Clé = id propre,
+      // index sur morceauId. (La v2 n'en gardait qu'un ; recréé ici.)
+      if (ev.oldVersion < 3 && db.objectStoreNames.contains('instrus')) db.deleteObjectStore('instrus');
+      if (!db.objectStoreNames.contains('instrus')) {
+        const s = db.createObjectStore('instrus', { keyPath: 'id' });
+        s.createIndex('parMorceau', 'morceauId', { unique: false });
+      }
     };
     req.onsuccess = () => { DB = req.result; resolve(); };
     req.onerror = () => reject(req.error);
@@ -77,12 +82,16 @@ export async function exporter() {
   return JSON.stringify({ ...(await etat()), exporteLe: new Date().toISOString() }, null, 2);
 }
 
-// Instrus (MP3) : stockés comme ArrayBuffer + type, un par morceau. Hors backup/export.
-export async function getInstru(morceauId) {
-  return (await sur(() => attendre(store('instrus', 'readonly').get(morceauId)))) || null;
+// Instrus (MP3, ArrayBuffer + type) : plusieurs par morceau. Hors backup/export.
+export function getInstrus(morceauId) {
+  return sur(() => new Promise((res, rej) => {
+    const req = store('instrus', 'readonly').index('parMorceau').getAll(IDBKeyRange.only(morceauId));
+    req.onsuccess = () => res(req.result || []);
+    req.onerror = () => rej(req.error);
+  }));
 }
 export function sauverInstru(instru) { return sur(() => attendre(store('instrus', 'readwrite').put(instru))); }
-export function supprimerInstru(morceauId) { return sur(() => attendre(store('instrus', 'readwrite').delete(morceauId))); }
+export function supprimerInstru(id) { return sur(() => attendre(store('instrus', 'readwrite').delete(id))); }
 
 // Remplace entièrement les morceaux et le coffre par ceux d'un état (restauration).
 export function remplacer(e) {
