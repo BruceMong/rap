@@ -7,6 +7,7 @@ import {
   getInstrus, sauverInstru, supprimerInstru, StockageIndisponible,
   listerInstrus, getInstru, getInstrusDuMorceau, migrerBibliothequeInstrus,
   listerSons, sauverSon, supprimerSon,
+  memoIds, getMemo, sauverMemo, supprimerMemo,
 } from '../js/store.js';
 
 test('ouvre et fait l’aller-retour d’un morceau', async () => {
@@ -108,4 +109,16 @@ test('sons (pads) : aller-retour, suppression, et hors backup', async () => {
   assert.ok(!('sons' in e)); // les pads ne partent pas dans la sauvegarde
   await supprimerSon('s1');
   assert.ok(!(await listerSons()).some((x) => x.id === 's1'));
+});
+
+test('mémos vocaux : aller-retour par ligne, clés légères, hors backup', async () => {
+  await ouvrir();
+  const buf = new TextEncoder().encode('la-la-la').buffer;
+  await sauverMemo({ ligneId: 'L1', type: 'audio/webm', buf, creeLe: Date.now() });
+  assert.equal((await getMemo('L1')).type, 'audio/webm');
+  assert.ok((await memoIds()).includes('L1'));
+  const e = await etat();
+  assert.ok(!('memos' in e)); // les mémos ne partent pas dans la sauvegarde
+  await supprimerMemo('L1');
+  assert.ok(!(await memoIds()).includes('L1'));
 });

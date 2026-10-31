@@ -151,6 +151,9 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .toggle-idee { display: inline-flex; align-items: center; gap: 2px; }
 .toggle-idee .chevron { display: inline-block; transition: transform .15s; }
 .toggle-idee.ouvert .chevron { transform: rotate(90deg); }
+.mini.memo-play { color: var(--accent); }
+.mini.memo-rec { color: #fff; background: var(--sys-red, #c2410c); border-color: var(--sys-red, #c2410c);
+  animation: pad-rec 1s steps(2, start) infinite; }
 .add-essai, .add-sous { background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 12.5px; padding: 3px 2px; text-align: left; }
 .add-essai:hover, .add-sous:hover { color: var(--accent); }

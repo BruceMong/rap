@@ -1,6 +1,6 @@
 // Écran d'un morceau : éditeur ligne par ligne, placards repliables (accordéon),
 // imbrication, validation (jaune), brouillons détachés. Persistance débouncée.
-import { getMorceau, sauverMorceau } from './store.js';
+import { getMorceau, sauverMorceau, memoIds, getMemo, sauverMemo, supprimerMemo } from './store.js';
 import {
   ajouterLigne, modifierLigne, basculerValide, basculerTest, supprimerLigne, ajouterPlacard,
   rangerDansLigne, insererLigneApres, deplacerLigne, uid,
@@ -21,6 +21,12 @@ let M = null;            // morceau courant (état de l'écran)
 let appEl = null;
 const ouverts = new Set(); // ids de lignes dont le placard est déplié
 const repliees = new Set(); // ids d'idées (tiroirs) repliées ; déplié par défaut
+const memos = new Set();    // ligneIds ayant un mémo vocal (chargé à l'ouverture)
+let memoRec = null;         // MediaRecorder en cours
+let memoRecLigne = null;    // ligneId en cours d'enregistrement
+let memoAudio = null;       // lecture d'un mémo
+let memoAudioLigne = null;
+let memoAudioUrl = null;
 let timer = null;
 let cible = null;          // { id, pos } : dernier curseur dans une ligne (cible d'insertion)
 let vue = 'edition';       // 'edition' | 'test' (jaune+vert) | 'scene' (jaune seul)
@@ -89,6 +95,7 @@ export async function rendreMorceau(app, id) {
   fermerPanneau();
   installerFlush();
   installerSwipeNav();
+  try { memos.clear(); (await memoIds()).forEach((id) => memos.add(id)); } catch { /* ignore */ }
   dessiner();
 }
 
@@ -130,6 +137,9 @@ function ligneHTML(l) {
         <span class="pieds" data-pieds="${esc(l.id)}"></span>
         <textarea class="ligne-edit" rows="1" data-ligne="${esc(l.id)}" placeholder="écris un vers…">${esc(l.texte)}</textarea>
         <span class="ligne-actions">
+          ${memoRecLigne === l.id
+    ? `<button class="mini memo-rec" data-memo-stop="${esc(l.id)}" title="arrêter l’enregistrement">● stop</button>`
+    : (memos.has(l.id) ? `<button class="mini memo-play" data-memo-play="${esc(l.id)}" title="écouter le mémo vocal">♪▶</button>` : '')}
           <button class="mini toggle-placard${np ? ' aPlacard' : ''}" data-ligne="${esc(l.id)}" title="brouillons">
             <span class="chevron">›</span>${np ? `<span class="badge">${np}</span>` : ''}</button>
           <button class="mini ${l.valide ? 'actif' : ''}" data-valide="${esc(l.id)}" title="garder (jaune)">✓</button>
@@ -208,6 +218,23 @@ function dessiner() {
       autoGrow(ta);
       majPiedsEtRimes();
     });
+    // Entrée = nouveau bloc : scinde au curseur, le texte après part dans une
+    // nouvelle ligne qui prend le focus. (Shift+Entrée garde un retour à la ligne.)
+    ta.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
+      e.preventDefault();
+      const id = ta.dataset.ligne;
+      const pos = ta.selectionStart;
+      const avant = ta.value.slice(0, pos);
+      const apres = ta.value.slice(pos);
+      M = modifierLigne(M, id, avant);
+      M = insererLigneApres(M, id, apres);
+      await sauverMaintenant();
+      dessiner();
+      const bl = appEl.querySelector(`.bloc-ligne[data-ligne="${CSS.escape(id)}"]`);
+      const next = bl && bl.nextElementSibling && bl.nextElementSibling.querySelector('.ligne-edit');
+      if (next) { next.focus(); next.setSelectionRange(0, 0); }
+    });
   });
 
   appEl.querySelectorAll('[data-menu-ligne]').forEach((b) => b.addEventListener('click', (e) => {
@@ -241,6 +268,8 @@ function dessiner() {
     M = basculerValide(M, b.dataset.valide);
     await sauverMaintenant(); dessiner();
   }));
+  appEl.querySelectorAll('[data-memo-play]').forEach((b) => b.addEventListener('click', () => jouerMemo(b.dataset.memoPlay)));
+  appEl.querySelectorAll('[data-memo-stop]').forEach((b) => b.addEventListener('click', arreterMemo));
   appEl.querySelectorAll('.add-essai').forEach((b) => b.addEventListener('click', async () => {
     ouverts.add(b.dataset.ligne);
     M = ajouterPlacard(M, b.dataset.ligne, '');
@@ -263,11 +292,16 @@ function dessiner() {
   // du bouton ✓. Sur la ligne et sur chaque essai de tiroir.
   appEl.querySelectorAll('.ligne-row').forEach((row) => {
     const id = row.closest('.bloc-ligne')?.dataset.ligne;
-    if (id) attacherSwipe(row, async () => { M = cyclerEtatLigne(M, id); await sauverMaintenant(); dessiner(); });
+    if (id) attacherSwipe(row, {
+      onRight: async () => { M = cyclerEtatLigne(M, id); await sauverMaintenant(); dessiner(); },
+      onLeft: () => basculerMemo(id),
+    });
   });
   appEl.querySelectorAll('.essai-row').forEach((row) => {
     const id = row.closest('.essai')?.dataset.idee;
-    if (id) attacherSwipe(row, async () => { M = cyclerEtatIdee(M, id); await sauverMaintenant(); dessiner(); });
+    if (id) attacherSwipe(row, {
+      onRight: async () => { M = cyclerEtatIdee(M, id); await sauverMaintenant(); dessiner(); },
+    });
   });
 
   majPiedsEtRimes();
@@ -301,8 +335,11 @@ function ouvrirMenuLigne(id, bloc) {
     <button data-a="test" class="${l.test ? 'actif' : ''}">à tester</button>
     <button data-a="rimes">rimes ♪</button>
     <button data-a="inserer">insérer dessous</button>
+    ${memos.has(id) ? '<button data-a="memo-suppr">supprimer le mémo vocal</button>' : ''}
     <button data-a="suppr">supprimer</button>`;
   bloc.querySelector('.ligne-row').insertAdjacentElement('afterend', menu);
+  const memoSuppr = menu.querySelector('[data-a="memo-suppr"]');
+  if (memoSuppr) memoSuppr.addEventListener('click', () => { menu.remove(); supprimerMemoLigne(id); });
   menu.querySelector('[data-a="test"]').addEventListener('click', async () => {
     M = basculerTest(M, id); await sauverMaintenant(); dessiner();
   });
@@ -319,6 +356,7 @@ function ouvrirMenuLigne(id, bloc) {
     if (ta) ta.focus();
   });
   menu.querySelector('[data-a="suppr"]').addEventListener('click', async () => {
+    if (memos.has(id)) { supprimerMemo(id).catch(() => {}); memos.delete(id); }
     M = supprimerLigne(M, id); await sauverMaintenant(); dessiner();
   });
 }
@@ -543,7 +581,7 @@ function attacherDrag(bloc) {
 // Swipe tactile horizontal vers la droite sur `el` → onCycle(). Tactile seulement
 // (la souris garde la sélection de texte). Le CSS touch-action: pan-y laisse le
 // défilement vertical au navigateur et nous confie le geste horizontal.
-function attacherSwipe(el, onCycle) {
+function attacherSwipe(el, { onRight, onLeft } = {}) {
   let x0 = 0, y0 = 0, decide = false, swipe = false, actif = false;
   el.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'touch') return;
@@ -556,14 +594,14 @@ function attacherSwipe(el, onCycle) {
     if (!decide) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       decide = true;
-      swipe = Math.abs(dx) > Math.abs(dy) * 1.3 && dx > 0;
+      swipe = Math.abs(dx) > Math.abs(dy) * 1.3;
       if (swipe) { try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
     }
     if (swipe) {
       e.preventDefault();
       el.style.transition = 'none';
-      el.style.transform = `translateX(${Math.max(0, Math.min(dx, 96))}px)`;
-      el.style.opacity = dx > 55 ? '0.8' : '1';
+      el.style.transform = `translateX(${Math.max(-96, Math.min(96, dx))}px)`;
+      el.style.opacity = Math.abs(dx) > 55 ? '0.8' : '1';
     }
   });
   const fin = (e) => {
@@ -573,13 +611,78 @@ function attacherSwipe(el, onCycle) {
     el.style.transition = 'transform .15s ease, opacity .15s ease';
     el.style.transform = '';
     el.style.opacity = '';
-    if (swipe && dx > 55) onCycle();
+    if (!swipe) return;
+    if (dx > 55 && onRight) onRight();
+    else if (dx < -55 && onLeft) onLeft();
   };
   el.addEventListener('pointerup', fin);
   el.addEventListener('pointercancel', fin);
 }
 
+function stopMemoAudio() {
+  if (memoAudio) { try { memoAudio.pause(); } catch { /* ignore */ } }
+  if (memoAudioUrl) { URL.revokeObjectURL(memoAudioUrl); memoAudioUrl = null; }
+  memoAudio = null; memoAudioLigne = null;
+}
+
+// Swipe gauche sur une ligne : démarre/arrête l'enregistrement d'un mémo vocal.
+function basculerMemo(id) {
+  if (memoRec) { if (memoRecLigne === id) arreterMemo(); return; }
+  demarrerMemo(id);
+}
+
+async function demarrerMemo(id) {
+  if (memoRec) return;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); } catch { return; }
+  let rec;
+  try { rec = new MediaRecorder(stream); } catch { stream.getTracks().forEach((t) => t.stop()); return; }
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+  rec.onstop = async () => {
+    stream.getTracks().forEach((t) => t.stop());
+    const type = rec.mimeType || 'audio/webm';
+    const blob = new Blob(chunks, { type });
+    memoRec = null; memoRecLigne = null;
+    if (blob.size) {
+      const buf = await blob.arrayBuffer();
+      try { await sauverMemo({ ligneId: id, type, buf, creeLe: Date.now() }); memos.add(id); }
+      catch { alerteStockage(); }
+    }
+    dessiner();
+  };
+  memoRec = rec; memoRecLigne = id;
+  rec.start();
+  dessiner(); // affiche le « ● stop » sur la ligne
+}
+
+function arreterMemo() {
+  if (memoRec && memoRec.state === 'recording') { try { memoRec.stop(); } catch { /* ignore */ } }
+}
+
+async function jouerMemo(id) {
+  if (memoAudio && memoAudioLigne === id) {
+    if (memoAudio.paused) memoAudio.play().catch(() => {}); else memoAudio.pause();
+    return;
+  }
+  stopMemoAudio();
+  const m = await getMemo(id);
+  if (!m) return;
+  memoAudioUrl = URL.createObjectURL(new Blob([m.buf], { type: m.type || 'audio/webm' }));
+  memoAudio = new Audio(memoAudioUrl);
+  memoAudioLigne = id;
+  memoAudio.play().catch(() => {});
+}
+
+async function supprimerMemoLigne(id) {
+  if (memoAudioLigne === id) stopMemoAudio();
+  await supprimerMemo(id).catch(() => {});
+  memos.delete(id);
+  dessiner();
+}
+
 async function retourAccueil() {
+  arreterMemo(); stopMemoAudio();
   await sauverMaintenant();
   demonterInstru(); demonterPads();
   location.hash = '';

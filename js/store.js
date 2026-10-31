@@ -1,6 +1,6 @@
 // Persistance locale (IndexedDB) : morceaux + coffre d'idées, et export JSON.
 const NOM = 'rap';
-const VERSION = 4;
+const VERSION = 5;
 let DB = null;
 
 export class StockageIndisponible extends Error {
@@ -28,6 +28,9 @@ export function ouvrir(idb = (typeof globalThis !== 'undefined' ? globalThis.ind
       // sons (pads/ad-libs, hors backup) : banque globale commune à tous les
       // morceaux, v4. Un son = { id, nom, type, buf, ordre, creeLe }.
       if (!db.objectStoreNames.contains('sons')) db.createObjectStore('sons', { keyPath: 'id' });
+      // mémos vocaux d'une ligne (hors backup), v5. Clé = ligneId (un par ligne).
+      // Un mémo = { ligneId, type, buf, creeLe }.
+      if (!db.objectStoreNames.contains('memos')) db.createObjectStore('memos', { keyPath: 'ligneId' });
     };
     req.onsuccess = () => { DB = req.result; resolve(); };
     req.onerror = () => reject(req.error);
@@ -129,6 +132,13 @@ export async function migrerBibliothequeInstrus() {
 export function listerSons() { return sur(() => attendre(store('sons', 'readonly').getAll())); }
 export function sauverSon(s) { return sur(() => attendre(store('sons', 'readwrite').put(s))); }
 export function supprimerSon(id) { return sur(() => attendre(store('sons', 'readwrite').delete(id))); }
+
+// Mémos vocaux par ligne (idée de mélodie / façon de dire, hors backup/export).
+// Clé = ligneId. memoIds() ne lit que les clés (léger ; pour afficher les pastilles).
+export function memoIds() { return sur(() => attendre(store('memos', 'readonly').getAllKeys())); }
+export function getMemo(ligneId) { return sur(() => attendre(store('memos', 'readonly').get(ligneId))); }
+export function sauverMemo(memo) { return sur(() => attendre(store('memos', 'readwrite').put(memo))); }
+export function supprimerMemo(ligneId) { return sur(() => attendre(store('memos', 'readwrite').delete(ligneId))); }
 
 // Remplace entièrement les morceaux et le coffre par ceux d'un état (restauration).
 export function remplacer(e) {

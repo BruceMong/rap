@@ -26,9 +26,15 @@ rime en couleur.
 - Les **tiroirs** (placards/essais) sont des idées dépliantes nommables (le texte
   sert de nom), avec **les mêmes états** vert/jaune (`cyclerEtatIdee`), imbriquables
   (tiroir dans tiroir). Repli/dépli par le chevron ; swipe droite pour l'état.
-- Gestes tactiles (`js/ui-morceau.js`) : swipe sur une ligne/essai = état ; **swipe
+- Gestes tactiles (`js/ui-morceau.js`) : swipe droite sur une ligne/essai = état ;
+  **swipe gauche sur une ligne** = démarrer/arrêter un **mémo vocal** ; **swipe
   depuis le bord gauche** = retour à l'accueil. Souris non concernée (garde la
   sélection de texte). `touch-action: pan-y` confie l'horizontal au JS.
+- **Entrée = nouveau bloc** : scinde la ligne au curseur (Shift+Entrée = vrai saut).
+- **Mémo vocal par ligne** (store `memos`, clé = ligneId, hors backup) : idée de
+  mélodie / façon de dire, enregistrée au micro. Pastille ♪▶ sur la ligne pour
+  réécouter ; suppression via le menu ⋯. Bouton **↺** dans la barre d'instru
+  (mode boucle) pour revenir au début de la boucle.
 
 ## Pads d'ad-libs (v3)
 
