@@ -155,6 +155,7 @@ function rendre() {
       <button class="instru-btn" id="ff" title="avancer de 5 s">»</button>
       <input type="range" id="seek" min="0" max="100" step="0.1" value="0" class="instru-seek">
       <span class="instru-temps" id="temps">0:00</span>
+      ${boucle ? '<button class="instru-btn" id="toA" title="revenir au début de la boucle">↺</button>' : ''}
       <button class="instru-btn ${boucle ? 'actif' : ''}" id="mode" title="${boucle ? 'boucle A–B (réglée dans « Mes instrus »)' : 'lecture en boucle complète'}">${boucle ? 'boucle' : 'normal'}</button>
     </div>
     <button class="instru-nom" id="choisir" title="choisir / ajouter un instru">${esc(instru.nom)} ▾${multi ? ` (${liste.length})` : ''}</button>`;
@@ -170,6 +171,11 @@ function rendre() {
     rendre();
   };
   b.querySelector('#choisir').onclick = ouvrirSelecteur;
+  if (boucle) b.querySelector('#toA').onclick = () => {
+    if (!audio) return;
+    audio.currentTime = instru.loopA || 0;
+    audio.play().catch(() => {});
+  };
   peindre();
 }
 
