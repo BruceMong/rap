@@ -1,5 +1,5 @@
 // Écran d'accueil : coffre à idées transversal + morceaux en cours / terminés.
-import { listerMorceaux, getCoffre, sauverCoffre, sauverMorceau, getMorceau } from './store.js';
+import { listerMorceaux, getCoffre, sauverCoffre, sauverMorceau, getMorceau, supprimerMorceau } from './store.js';
 import { creerMorceau, envoyerIdeeVersMorceau, morceauDepuisTexte, uid } from './model.js';
 import { esc, dateRelative, alerteStockage } from './ui-util.js';
 import { planifier as planifierBackup } from './backup.js';
@@ -22,16 +22,25 @@ function carte(m) {
     np ? `<b>${np}</b> placards` : '',
     dateRelative(m.modifieLe),
   ].filter(Boolean).map((x) => `<span>${x}</span>`).join('');
-  return `<button class="morceau" data-id="${esc(m.id)}">
-    <div class="m-top"><span class="m-title">${esc(m.titre || 'Sans titre')}</span>${pill}</div>
+  return `<div class="morceau${m.epingle ? ' epingle' : ''}" data-id="${esc(m.id)}" role="button" tabindex="0">
+    <div class="m-top">
+      ${m.epingle ? '<span class="pin-ind" title="épinglé">★</span>' : ''}
+      <span class="m-title">${esc(m.titre || 'Sans titre')}</span>${pill}
+      <button class="kebab" data-menu="${esc(m.id)}" title="options">⋯</button>
+    </div>
     <div class="m-apercu">${esc(apercu(m))}</div>
     <div class="m-meta">${meta}</div>
-  </button>`;
+  </div>`;
+}
+
+const activite = (m) => Math.max(m.modifieLe || 0, m.ouvertLe || 0);
+function trier(a, b) {
+  return (b.epingle ? 1 : 0) - (a.epingle ? 1 : 0) || activite(b) - activite(a);
 }
 
 export async function rendreAccueil(app) {
   const [morceaux, coffre] = await Promise.all([listerMorceaux(), getCoffre()]);
-  morceaux.sort((a, b) => (b.modifieLe || 0) - (a.modifieLe || 0));
+  morceaux.sort(trier);
   const enCours = morceaux.filter((m) => m.statut !== 'fini');
   const finis = morceaux.filter((m) => m.statut === 'fini');
 
@@ -65,9 +74,18 @@ export async function rendreAccueil(app) {
     </div>
   `;
 
-  app.querySelectorAll('.morceau').forEach((btn) => {
-    btn.addEventListener('click', () => { location.hash = 'm=' + btn.dataset.id; });
+  app.querySelectorAll('.morceau').forEach((carte) => {
+    const ouvrir = (e) => {
+      if (e.target.closest('.kebab') || e.target.closest('.menu-carte')) return;
+      location.hash = 'm=' + carte.dataset.id;
+    };
+    carte.addEventListener('click', ouvrir);
+    carte.addEventListener('keydown', (e) => { if (e.key === 'Enter') ouvrir(e); });
   });
+  app.querySelectorAll('.kebab').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    ouvrirMenuCarte(app, morceaux, b.dataset.menu, b.closest('.morceau'));
+  }));
 
   document.getElementById('nouveau').addEventListener('click', async () => {
     const m = creerMorceau('');
@@ -84,6 +102,41 @@ export async function rendreAccueil(app) {
 
   document.getElementById('btn-apropos').addEventListener('click', () => { location.hash = 'apropos'; });
   document.getElementById('coller').addEventListener('click', () => ouvrirColler(app));
+}
+
+// Menu d'une carte : épingler / supprimer (suppression confirmée en deux clics).
+function ouvrirMenuCarte(app, morceaux, id, carteEl) {
+  if (!carteEl) return;
+  const existant = carteEl.querySelector('.menu-carte');
+  if (existant) { existant.remove(); return; }
+  const m = morceaux.find((x) => x.id === id);
+  if (!m) return;
+  const menu = document.createElement('div');
+  menu.className = 'menu-carte';
+  menu.innerHTML = `
+    <button data-act="epingle">${m.epingle ? 'Désépingler' : 'Épingler en haut'}</button>
+    <button data-act="suppr">Supprimer</button>`;
+  carteEl.querySelector('.m-top').insertAdjacentElement('afterend', menu);
+  menu.querySelector('[data-act="epingle"]').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    m.epingle = !m.epingle;
+    try { await sauverMorceau(m); } catch { alerteStockage(); return; }
+    planifierBackup();
+    rendreAccueil(app);
+  });
+  const suppr = menu.querySelector('[data-act="suppr"]');
+  suppr.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (suppr.dataset.sure !== '1') {
+      suppr.textContent = 'Confirmer la suppression';
+      suppr.dataset.sure = '1';
+      setTimeout(() => { if (suppr.isConnected) { suppr.textContent = 'Supprimer'; suppr.dataset.sure = ''; } }, 4000);
+      return;
+    }
+    try { await supprimerMorceau(id); } catch { alerteStockage(); return; }
+    planifierBackup();
+    rendreAccueil(app);
+  });
 }
 
 // Crée un morceau à partir d'un bloc de texte collé (ex. depuis le bloc-notes).

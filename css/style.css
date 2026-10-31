@@ -98,6 +98,15 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
   padding: 3px 9px; border-radius: 20px; font-weight: 600; flex: none; }
 .pill.encours { color: var(--on-accent); background: var(--accent); }
 .pill.fini { color: var(--muted); border: 1px solid var(--line); }
+.pin-ind { color: var(--accent); flex: none; }
+.kebab { margin-left: 6px; background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 18px; line-height: 1; padding: 2px 6px; flex: none; border-radius: 6px; }
+.kebab:hover { color: var(--accent); background: var(--fill-faint); }
+.menu-carte { display: flex; gap: 8px; margin: 6px 0 2px; flex-wrap: wrap; }
+.menu-carte button { background: var(--fill-faint); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 8px; font: inherit; font-size: 12.5px; padding: 6px 10px; cursor: pointer; }
+.menu-carte button:hover { border-color: var(--accent); }
+.menu-carte [data-act="suppr"][data-sure="1"] { color: var(--sys-red, #c2410c); border-color: var(--sys-red, #c2410c); }
 .m-apercu { font-size: 13.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-meta { font-size: 11.5px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; }
 .m-meta b { color: var(--fg); font-weight: 600; }
@@ -175,10 +184,38 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .poignee { flex: none; align-self: stretch; display: flex; align-items: center; color: var(--muted);
   cursor: grab; touch-action: none; user-select: none; padding: 0 3px; font-size: 14px; }
 .poignee:active { cursor: grabbing; }
-.drag-source { opacity: .45; }
-.drag-cible .ligne-row { outline: 2px dashed var(--accent); outline-offset: 1px; border-radius: 9px; background: var(--fill); }
+.drag-source { transition: height .18s ease, opacity .18s ease; opacity: 0; overflow: hidden; }
+.drag-cible .ligne-row { outline: 2px solid var(--accent); background: var(--fill);
+  transform: scale(1.015); transition: transform .12s ease, background .12s ease; border-radius: 10px; }
+.drag-ghost { position: fixed; top: 0; left: 0; z-index: 60; pointer-events: none;
+  background: var(--surface); border: 1px solid var(--accent); border-radius: 10px; padding: 8px 12px;
+  font-size: 15px; max-width: 72vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 12px 30px rgba(0,0,0,.45); will-change: transform; }
 body.drag-en-cours { user-select: none; }
 body.drag-en-cours .ligne-edit { pointer-events: none; }
+
+/* état « à tester » (vert) */
+:root { --test-bg: rgba(29,122,107,.16); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --test-bg: rgba(77,208,181,.14); } }
+:root[data-theme="dark"] { --test-bg: rgba(77,208,181,.14); }
+.ligne-row.test { background: var(--test-bg); }
+
+/* badge nombre d'idées dans un placard */
+.toggle-placard.aPlacard { color: var(--accent); }
+.badge { display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px;
+  padding: 0 4px; margin-left: 2px; border-radius: 9px; background: var(--accent); color: var(--on-accent);
+  font-size: 10px; font-weight: 600; vertical-align: middle; }
+
+/* menu compact d'une ligne */
+.menu-ligne { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 6px 8px 26px; }
+.menu-ligne button { background: var(--fill-faint); border: 1px solid var(--line); color: var(--fg);
+  border-radius: 8px; font: inherit; font-size: 12.5px; padding: 6px 10px; cursor: pointer; }
+.menu-ligne button:hover { border-color: var(--accent); }
+.menu-ligne button.actif { color: var(--on-accent); background: var(--r1); border-color: var(--r1); }
+
+/* vues lecture : gardé (jaune) vs à tester (vert) */
+.scene-texte p.garde { border-left: 3px solid var(--accent); padding-left: 10px; }
+.scene-texte p.test { border-left: 3px solid var(--r1); padding-left: 10px; }
 
 .scene-titre { font-family: var(--font-display); font-size: 24px; font-weight: 600; margin: 8px 0 16px; text-wrap: balance; }
 .scene-texte { display: flex; flex-direction: column; gap: 10px; font-size: 19px; line-height: 1.6; }

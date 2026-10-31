@@ -23,7 +23,7 @@ export function creerMorceau(titre) {
 }
 
 export function ajouterLigne(m, texte) {
-  const ligne = { id: uid(), texte: texte ?? '', valide: false, placards: [] };
+  const ligne = { id: uid(), texte: texte ?? '', valide: false, test: false, placards: [] };
   return touch(m, { lignes: [...m.lignes, ligne] });
 }
 
@@ -33,10 +33,32 @@ export function modifierLigne(m, ligneId, texte) {
   });
 }
 
+// États d'une ligne : brouillon → à tester (vert) → gardé/validé (jaune).
+// valide et test s'excluent.
 export function basculerValide(m, ligneId) {
   return touch(m, {
-    lignes: m.lignes.map((l) => (l.id === ligneId ? { ...l, valide: !l.valide } : l)),
+    lignes: m.lignes.map((l) => (l.id === ligneId
+      ? { ...l, valide: !l.valide, test: l.valide ? l.test : false }
+      : l)),
   });
+}
+
+export function basculerTest(m, ligneId) {
+  return touch(m, {
+    lignes: m.lignes.map((l) => (l.id === ligneId
+      ? { ...l, test: !l.test, valide: l.test ? l.valide : false }
+      : l)),
+  });
+}
+
+// Insère une nouvelle ligne (en travaux) juste après la ligne donnée.
+export function insererLigneApres(m, ligneId, texte = '') {
+  const i = m.lignes.findIndex((l) => l.id === ligneId);
+  if (i < 0) return ajouterLigne(m, texte);
+  const ligne = { id: uid(), texte, valide: false, test: false, placards: [] };
+  const lignes = [...m.lignes];
+  lignes.splice(i + 1, 0, ligne);
+  return touch(m, { lignes });
 }
 
 export function supprimerLigne(m, ligneId) {
@@ -70,7 +92,7 @@ export function ajouterPlacard(m, ligneId, texte, parentPlacardId = null) {
 export function morceauDepuisTexte(texte, titre = '') {
   const m = creerMorceau(titre);
   const lignes = String(texte).split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
-    .map((t) => ({ id: uid(), texte: t, valide: false, placards: [] }));
+    .map((t) => ({ id: uid(), texte: t, valide: false, test: false, placards: [] }));
   return { ...m, lignes, modifieLe: Date.now() };
 }
 
