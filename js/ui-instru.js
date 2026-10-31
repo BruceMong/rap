@@ -119,7 +119,9 @@ function rendre() {
   const multi = liste.length > 1;
   b.innerHTML = `
     <div class="instru-ligne">
+      <button class="instru-btn" id="rew" title="reculer de 5 s">«</button>
       <button class="instru-btn" id="pp">▶</button>
+      <button class="instru-btn" id="ff" title="avancer de 5 s">»</button>
       <input type="range" id="seek" min="0" max="100" step="0.1" value="0" class="instru-seek">
       <span class="instru-temps" id="temps">0:00</span>
       <button class="instru-btn ${boucle ? 'actif' : ''}" id="mode">${boucle ? 'boucle' : 'normal'}</button>
@@ -133,6 +135,8 @@ function rendre() {
     <button class="instru-nom" id="choisir" title="choisir / ajouter un instru">${esc(instru.nom)} ▾${multi ? ` (${liste.length})` : ''}</button>`;
 
   b.querySelector('#pp').onclick = () => { if (audio.paused) audio.play().catch(() => {}); else audio.pause(); };
+  b.querySelector('#rew').onclick = () => { if (audio) audio.currentTime = Math.max(0, audio.currentTime - 5); };
+  b.querySelector('#ff').onclick = () => { if (audio) audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 5); };
   b.querySelector('#seek').oninput = (e) => { if (audio.duration) audio.currentTime = (e.target.value / 100) * audio.duration; };
   b.querySelector('#mode').onclick = () => {
     instru.mode = boucle ? 'normal' : 'boucle';
