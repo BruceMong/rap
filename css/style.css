@@ -119,7 +119,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
   border: none; background: none; color: var(--fg); width: 100%; padding: 2px 0; }
 .lignes { display: flex; flex-direction: column; gap: 2px; margin-top: 10px; }
 .bloc-ligne { border-radius: 9px; }
-.ligne-row { display: flex; align-items: flex-start; gap: 6px; padding: 4px 6px; }
+.ligne-row { display: flex; align-items: flex-start; gap: 6px; padding: 4px 6px; touch-action: pan-y; }
 .ligne-row.valide { background: var(--valide-bg); }
 .ligne-edit { flex: 1; min-width: 0; border: none; background: none; color: var(--fg);
   font: inherit; font-size: 15.5px; resize: none; overflow: hidden; line-height: 1.5; padding: 4px 0; }
@@ -140,10 +140,17 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .placard-pad { margin: 2px 8px 8px 26px; padding: 8px 10px; border-radius: 10px;
   border-left: 2px dashed var(--accent); background: var(--fill-faint);
   display: flex; flex-direction: column; gap: 6px; }
-.essai { display: flex; align-items: flex-start; gap: 6px; font-size: 14px; }
+.essai { display: flex; flex-direction: column; font-size: 14px; }
+.essai-row { display: flex; align-items: flex-start; gap: 6px; padding: 2px 4px; border-radius: 6px;
+  touch-action: pan-y; }
+.essai.valide > .essai-row { background: var(--valide-bg); }
+.essai.test > .essai-row { background: var(--test-bg); }
 .essai .essai-edit { flex: 1; min-width: 0; border: none; background: none; color: var(--fg);
   font: inherit; font-size: 14px; resize: none; overflow: hidden; }
 .sous { border-left: 1px dotted var(--line); padding-left: 8px; margin-top: 2px; }
+.toggle-idee { display: inline-flex; align-items: center; gap: 2px; }
+.toggle-idee .chevron { display: inline-block; transition: transform .15s; }
+.toggle-idee.ouvert .chevron { transform: rotate(90deg); }
 .add-essai, .add-sous { background: none; border: none; color: var(--muted); cursor: pointer;
   font-size: 12.5px; padding: 3px 2px; text-align: left; }
 .add-essai:hover, .add-sous:hover { color: var(--accent); }

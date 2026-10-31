@@ -19,6 +19,17 @@ rime en couleur.
   (chargé en différé) + phonétisation par règles pour les mots hors-dico.
 - **En ligne** : dépôt public `BruceMong/rap`, GitHub Pages → https://brucemong.github.io/rap/
 
+## Écriture : lignes & tiroirs (v3)
+
+- États d'une ligne : normal → **à tester** (vert) → **gardé** (jaune). Bouton ✓ ou
+  **swipe tactile vers la droite** (raccourci) qui cycle les 3 états (`cyclerEtatLigne`).
+- Les **tiroirs** (placards/essais) sont des idées dépliantes nommables (le texte
+  sert de nom), avec **les mêmes états** vert/jaune (`cyclerEtatIdee`), imbriquables
+  (tiroir dans tiroir). Repli/dépli par le chevron ; swipe droite pour l'état.
+- Gestes tactiles (`js/ui-morceau.js`) : swipe sur une ligne/essai = état ; **swipe
+  depuis le bord gauche** = retour à l'accueil. Souris non concernée (garde la
+  sélection de texte). `touch-action: pan-y` confie l'horizontal au JS.
+
 ## Pads d'ad-libs (v3)
 
 - Banque **globale** de petits sons (store IndexedDB `sons`, keyPath `id`), **hors

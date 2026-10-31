@@ -75,6 +75,41 @@ export function basculerTest(m, ligneId) {
   });
 }
 
+// Cycle d'état (raccourci du swipe) : normal → à tester (vert) → gardé (jaune) →
+// normal. Même logique pour une ligne et pour une idée (tiroir).
+function cyclerEtat(o) {
+  if (!o.test && !o.valide) return { ...o, test: true, valide: false };
+  if (o.test) return { ...o, test: false, valide: true };
+  return { ...o, test: false, valide: false };
+}
+
+export function cyclerEtatLigne(m, ligneId) {
+  m = migrerMorceau(m);
+  return majActive(m, {
+    lignes: versionActive(m).lignes.map((l) => (l.id === ligneId ? cyclerEtat(l) : l)),
+  });
+}
+
+// Applique fn à l'idée d'id donné, où qu'elle soit dans l'arbre (immutable).
+function mapIdee(idees, id, fn) {
+  return idees.map((i) => {
+    if (i.id === id) return fn(i);
+    if (i.enfants && i.enfants.length) return { ...i, enfants: mapIdee(i.enfants, id, fn) };
+    return i;
+  });
+}
+
+// Cycle d'état d'une idée (tiroir ou ligne de tiroir), dans les placards comme
+// dans les détachés de la version active.
+export function cyclerEtatIdee(m, ideeId) {
+  m = migrerMorceau(m);
+  const va = versionActive(m);
+  return majActive(m, {
+    lignes: va.lignes.map((l) => ({ ...l, placards: mapIdee(l.placards, ideeId, cyclerEtat) })),
+    detaches: mapIdee(va.detaches, ideeId, cyclerEtat),
+  });
+}
+
 export function insererLigneApres(m, ligneId, texte = '') {
   m = migrerMorceau(m);
   const lignes = [...versionActive(m).lignes];
@@ -114,7 +149,7 @@ function insererIdee(idees, parentId, nouvelle) {
 
 export function ajouterPlacard(m, ligneId, texte, parentPlacardId = null) {
   m = migrerMorceau(m);
-  const nouvelle = { id: uid(), texte: texte ?? '', enfants: [] };
+  const nouvelle = { id: uid(), texte: texte ?? '', enfants: [], valide: false, test: false };
   return majActive(m, {
     lignes: versionActive(m).lignes.map((l) =>
       l.id === ligneId
@@ -131,7 +166,7 @@ export function rangerDansLigne(m, sourceId, cibleId) {
   const src = va.lignes.find((l) => l.id === sourceId);
   const cible = va.lignes.find((l) => l.id === cibleId);
   if (!src || !cible) return m;
-  const idee = { id: uid(), texte: src.texte, enfants: src.placards };
+  const idee = { id: uid(), texte: src.texte, enfants: src.placards, valide: src.valide, test: src.test };
   return majActive(m, {
     lignes: va.lignes
       .filter((l) => l.id !== sourceId)

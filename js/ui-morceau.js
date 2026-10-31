@@ -6,6 +6,7 @@ import {
   rangerDansLigne, insererLigneApres, deplacerLigne, uid,
   versionActive, migrerMorceau, creerVersion, nouvelleVersionDepuisGardes,
   changerVersion, renommerVersion, supprimerVersion,
+  cyclerEtatLigne, cyclerEtatIdee,
 } from './model.js';
 import { esc, autoGrow, alerteStockage } from './ui-util.js';
 import { compterPieds } from './syllabes.js';
@@ -19,6 +20,7 @@ import { monterPads, demonterPads } from './ui-pads.js';
 let M = null;            // morceau courant (état de l'écran)
 let appEl = null;
 const ouverts = new Set(); // ids de lignes dont le placard est déplié
+const repliees = new Set(); // ids d'idées (tiroirs) repliées ; déplié par défaut
 let timer = null;
 let cible = null;          // { id, pos } : dernier curseur dans une ligne (cible d'insertion)
 let vue = 'edition';       // 'edition' | 'test' (jaune+vert) | 'scene' (jaune seul)
@@ -86,16 +88,30 @@ export async function rendreMorceau(app, id) {
   vue = 'edition';
   fermerPanneau();
   installerFlush();
+  installerSwipeNav();
   dessiner();
 }
 
+// Un essai = une idée dans un tiroir. Il a les mêmes états que les lignes
+// (vert « à tester » / jaune « gardé »), est nommable (son texte sert de nom) et
+// dépliable quand il contient d'autres idées (tiroir dans tiroir).
 function essaiHTML(idee) {
-  const enfants = idee.enfants.length
+  const etat = idee.valide ? ' valide' : (idee.test ? ' test' : '');
+  const aEnfants = idee.enfants && idee.enfants.length;
+  const ouvert = aEnfants && !repliees.has(idee.id);
+  const enfants = ouvert
     ? `<div class="sous">${idee.enfants.map(essaiHTML).join('')}</div>` : '';
-  return `<div class="essai" data-idee="${esc(idee.id)}">
-      <textarea class="essai-edit" rows="1" data-idee="${esc(idee.id)}">${esc(idee.texte)}</textarea>
-      <button class="mini" data-sous="${esc(idee.id)}" title="idée dans l’idée">↳</button>
-      <button class="mini" data-del-idee="${esc(idee.id)}" title="supprimer">✕</button>
+  const chevron = aEnfants
+    ? `<button class="mini toggle-idee${ouvert ? ' ouvert' : ''}" data-toggle-idee="${esc(idee.id)}" title="déplier / replier">
+         <span class="chevron">›</span><span class="badge">${idee.enfants.length}</span></button>`
+    : '';
+  return `<div class="essai${etat}" data-idee="${esc(idee.id)}">
+      <div class="essai-row">
+        <textarea class="essai-edit" rows="1" data-idee="${esc(idee.id)}">${esc(idee.texte)}</textarea>
+        ${chevron}
+        <button class="mini" data-sous="${esc(idee.id)}" title="idée dans l’idée">↳</button>
+        <button class="mini" data-del-idee="${esc(idee.id)}" title="supprimer">✕</button>
+      </div>
       ${enfants}
     </div>`;
 }
@@ -150,11 +166,7 @@ function dessiner() {
     ${detaches}
   `;
 
-  document.getElementById('retour').addEventListener('click', async () => {
-    await sauverMaintenant();
-    demonterInstru(); demonterPads();
-    location.hash = '';
-  });
+  document.getElementById('retour').addEventListener('click', retourAccueil);
   document.getElementById('statut').addEventListener('click', async () => {
     M.statut = M.statut === 'fini' ? 'en_cours' : 'fini';
     await sauverMaintenant(); dessiner();
@@ -212,6 +224,12 @@ function dessiner() {
       autoGrow(ta);
     });
   });
+  appEl.querySelectorAll('[data-toggle-idee]').forEach((b) => b.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const id = b.dataset.toggleIdee;
+    if (repliees.has(id)) repliees.delete(id); else repliees.add(id);
+    dessiner();
+  }));
 
   // actions
   appEl.querySelectorAll('.toggle-placard').forEach((b) => b.addEventListener('click', () => {
@@ -240,6 +258,17 @@ function dessiner() {
   }));
 
   appEl.querySelectorAll('.bloc-ligne').forEach(attacherDrag);
+
+  // Swipe tactile vers la droite : cycle l'état (vert → jaune → normal), raccourci
+  // du bouton ✓. Sur la ligne et sur chaque essai de tiroir.
+  appEl.querySelectorAll('.ligne-row').forEach((row) => {
+    const id = row.closest('.bloc-ligne')?.dataset.ligne;
+    if (id) attacherSwipe(row, async () => { M = cyclerEtatLigne(M, id); await sauverMaintenant(); dessiner(); });
+  });
+  appEl.querySelectorAll('.essai-row').forEach((row) => {
+    const id = row.closest('.essai')?.dataset.idee;
+    if (id) attacherSwipe(row, async () => { M = cyclerEtatIdee(M, id); await sauverMaintenant(); dessiner(); });
+  });
 
   majPiedsEtRimes();
   // Rafraîchit une fois le dico chargé en différé (valeurs d'abord via G2P).
@@ -405,9 +434,7 @@ function dessinerLecture() {
       ? `<div class="scene-texte">${lignes.map((l) => `<p class="${l.valide ? 'garde' : 'test'}">${esc(l.texte)}</p>`).join('')}</div>`
       : `<p class="vide">${vue === 'scene' ? 'Aucun vers gardé (✓).' : 'Aucun vers gardé ou à tester.'}</p>`}
   `;
-  document.getElementById('retour').addEventListener('click', async () => {
-    await sauverMaintenant(); demonterInstru(); demonterPads(); location.hash = '';
-  });
+  document.getElementById('retour').addEventListener('click', retourAccueil);
   document.getElementById('vue').addEventListener('click', cyclerVue);
   monterInstru(M.id);
   monterPads();
@@ -511,6 +538,73 @@ function attacherDrag(bloc) {
     poignee.addEventListener('pointerup', up);
     poignee.addEventListener('pointercancel', up);
   });
+}
+
+// Swipe tactile horizontal vers la droite sur `el` → onCycle(). Tactile seulement
+// (la souris garde la sélection de texte). Le CSS touch-action: pan-y laisse le
+// défilement vertical au navigateur et nous confie le geste horizontal.
+function attacherSwipe(el, onCycle) {
+  let x0 = 0, y0 = 0, decide = false, swipe = false, actif = false;
+  el.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    if (e.target.closest('.poignee, button')) return; // poignée (drag) et boutons intacts
+    x0 = e.clientX; y0 = e.clientY; decide = false; swipe = false; actif = true;
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!actif) return;
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    if (!decide) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      decide = true;
+      swipe = Math.abs(dx) > Math.abs(dy) * 1.3 && dx > 0;
+      if (swipe) { try { el.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+    }
+    if (swipe) {
+      e.preventDefault();
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${Math.max(0, Math.min(dx, 96))}px)`;
+      el.style.opacity = dx > 55 ? '0.8' : '1';
+    }
+  });
+  const fin = (e) => {
+    if (!actif) return;
+    actif = false;
+    const dx = e.clientX - x0;
+    el.style.transition = 'transform .15s ease, opacity .15s ease';
+    el.style.transform = '';
+    el.style.opacity = '';
+    if (swipe && dx > 55) onCycle();
+  };
+  el.addEventListener('pointerup', fin);
+  el.addEventListener('pointercancel', fin);
+}
+
+async function retourAccueil() {
+  await sauverMaintenant();
+  demonterInstru(); demonterPads();
+  location.hash = '';
+}
+
+// Swipe tactile depuis le bord gauche vers la droite → retour à l'accueil.
+// Départ dans les ~24 px de gauche pour ne pas entrer en conflit avec le swipe
+// d'état d'une ligne (qui part, lui, au milieu de la ligne). Installé une fois.
+let swipeNavInstalle = false;
+function installerSwipeNav() {
+  if (swipeNavInstalle) return;
+  swipeNavInstalle = true;
+  let x0 = 0, y0 = 0, candidat = false;
+  document.addEventListener('pointerdown', (e) => {
+    candidat = e.pointerType === 'touch' && !!M && e.clientX <= 24;
+    x0 = e.clientX; y0 = e.clientY;
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!candidat) return;
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    if (dx > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) { candidat = false; retourAccueil(); }
+  });
+  const fin = () => { candidat = false; };
+  document.addEventListener('pointerup', fin);
+  document.addEventListener('pointercancel', fin);
 }
 
 // Compteur de pieds (toujours) + schéma de rime en barres colorées (si activé).

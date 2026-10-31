@@ -6,6 +6,7 @@ import {
   rangerDansLigne, basculerTest, insererLigneApres, deplacerLigne,
   versionActive, migrerMorceau, creerVersion, nouvelleVersionDepuisGardes,
   changerVersion, renommerVersion, supprimerVersion,
+  cyclerEtatLigne, cyclerEtatIdee,
 } from '../js/model.js';
 
 const L = (m) => versionActive(m).lignes;
@@ -156,4 +157,38 @@ test('supprimerVersion ne supprime jamais la dernière', () => {
   const m = creerMorceau('t');
   const r = supprimerVersion(m, m.versionActiveId);
   assert.equal(r.versions.length, 1);
+});
+
+test('cyclerEtatLigne : normal → test → gardé → normal', () => {
+  let m = ajouterLigne(creerMorceau('t'), 'vers');
+  const id = L(m)[0].id;
+  m = cyclerEtatLigne(m, id);
+  assert.deepEqual([L(m)[0].test, L(m)[0].valide], [true, false]);
+  m = cyclerEtatLigne(m, id);
+  assert.deepEqual([L(m)[0].test, L(m)[0].valide], [false, true]);
+  m = cyclerEtatLigne(m, id);
+  assert.deepEqual([L(m)[0].test, L(m)[0].valide], [false, false]);
+});
+
+test('cyclerEtatIdee : cycle l’état d’un essai de tiroir', () => {
+  let m = ajouterLigne(creerMorceau('t'), 'vers');
+  const lid = L(m)[0].id;
+  m = ajouterPlacard(m, lid, 'rime en -et');
+  const idee = L(m)[0].placards[0];
+  assert.deepEqual([idee.test, idee.valide], [false, false]); // créé neutre
+  m = cyclerEtatIdee(m, idee.id);
+  assert.equal(L(m)[0].placards[0].test, true);
+  m = cyclerEtatIdee(m, idee.id);
+  assert.equal(L(m)[0].placards[0].valide, true);
+});
+
+test('cyclerEtatIdee atteint une idée imbriquée (tiroir dans tiroir)', () => {
+  let m = ajouterLigne(creerMorceau('t'), 'vers');
+  const lid = L(m)[0].id;
+  m = ajouterPlacard(m, lid, 'tiroir');
+  const parent = L(m)[0].placards[0];
+  m = ajouterPlacard(m, lid, 'enfant', parent.id);
+  const enfant = L(m)[0].placards[0].enfants[0];
+  m = cyclerEtatIdee(m, enfant.id);
+  assert.equal(L(m)[0].placards[0].enfants[0].test, true);
 });
