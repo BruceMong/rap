@@ -65,6 +65,15 @@ export function ajouterPlacard(m, ligneId, texte, parentPlacardId = null) {
   });
 }
 
+// Crée un morceau à partir d'un bloc de texte : une ligne (en travaux) par ligne
+// non vide. Pour importer un texte depuis le bloc-notes.
+export function morceauDepuisTexte(texte, titre = '') {
+  const m = creerMorceau(titre);
+  const lignes = String(texte).split(/\r?\n/).map((s) => s.trim()).filter(Boolean)
+    .map((t) => ({ id: uid(), texte: t, valide: false, placards: [] }));
+  return { ...m, lignes, modifieLe: Date.now() };
+}
+
 // Retire l'idée du coffre et l'ajoute en nouvelle ligne en travaux en fin de m.
 export function envoyerIdeeVersMorceau(coffre, ideeId, m) {
   const idee = coffre.find((i) => i.id === ideeId);

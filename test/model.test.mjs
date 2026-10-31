@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   creerMorceau, ajouterLigne, modifierLigne, basculerValide,
-  supprimerLigne, ajouterPlacard, envoyerIdeeVersMorceau,
+  supprimerLigne, ajouterPlacard, envoyerIdeeVersMorceau, morceauDepuisTexte,
 } from '../js/model.js';
 
 test('creerMorceau : en cours, sans ligne ni détaché', () => {
@@ -58,6 +58,16 @@ test('ajouterPlacard et imbrication (idée dans l’idée)', () => {
   assert.equal(m.lignes[0].placards.length, 1);
   assert.equal(m.lignes[0].placards[0].enfants.length, 1);
   assert.equal(m.lignes[0].placards[0].enfants[0].texte, 'enfant');
+});
+
+test('morceauDepuisTexte : une ligne (en travaux) par ligne non vide', () => {
+  const m = morceauDepuisTexte('Ligne un\n\n  Ligne deux  \n', 'Mon titre');
+  assert.equal(m.titre, 'Mon titre');
+  assert.equal(m.lignes.length, 2);
+  assert.equal(m.lignes[0].texte, 'Ligne un');
+  assert.equal(m.lignes[1].texte, 'Ligne deux');
+  assert.equal(m.lignes[0].valide, false);
+  assert.ok(m.lignes[0].id && m.lignes[1].id !== m.lignes[0].id);
 });
 
 test('envoyerIdeeVersMorceau : hors coffre, en ligne en travaux en fin', () => {
