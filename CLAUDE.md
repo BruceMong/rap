@@ -19,6 +19,21 @@ rime en couleur.
   (chargé en différé) + phonétisation par règles pour les mots hors-dico.
 - **En ligne** : dépôt public `BruceMong/rap`, GitHub Pages → https://brucemong.github.io/rap/
 
+## Pads d'ad-libs (v3)
+
+- Banque **globale** de petits sons (store IndexedDB `sons`, keyPath `id`), **hors
+  backup/export**, commune à tous les morceaux. Un son = `{ id, nom, type, buf,
+  ordre, creeLe }`.
+- Déclenchement **faible latence via Web Audio API** (`js/pads.js`) : chaque son
+  décodé une fois en AudioBuffer, rejoué par une source neuve à chaque tap →
+  superposable, re-déclenchable, se mixe par-dessus l'instru sans le couper.
+  AudioContext « réveillé » au premier geste (déverrouillage mobile).
+- UI (`js/ui-pads.js`) : **languette fixe à droite** (hors `#app`) qui ouvre/ferme
+  un **overlay** (caché par défaut) avec la grille de pads. Montée sur l'écran
+  morceau (toutes vues) via `monterPads`/`demonterPads`. Ajout par **import de
+  fichier** ou **enregistrement micro** (MediaRecorder, souvent audio/webm —
+  lisible par decodeAudioData) ; renommage/suppression en mode « éditer ».
+
 ## Sauvegarde cloud (filet de sécurité, v2)
 
 - Projet **Supabase « rap »** (id `mttoschvyjnzamtehajy`, eu-west-3) — `js/backup.js`.

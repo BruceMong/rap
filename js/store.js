@@ -1,6 +1,6 @@
 // Persistance locale (IndexedDB) : morceaux + coffre d'idées, et export JSON.
 const NOM = 'rap';
-const VERSION = 3;
+const VERSION = 4;
 let DB = null;
 
 export class StockageIndisponible extends Error {
@@ -25,6 +25,9 @@ export function ouvrir(idb = (typeof globalThis !== 'undefined' ? globalThis.ind
         const s = db.createObjectStore('instrus', { keyPath: 'id' });
         s.createIndex('parMorceau', 'morceauId', { unique: false });
       }
+      // sons (pads/ad-libs, hors backup) : banque globale commune à tous les
+      // morceaux, v4. Un son = { id, nom, type, buf, ordre, creeLe }.
+      if (!db.objectStoreNames.contains('sons')) db.createObjectStore('sons', { keyPath: 'id' });
     };
     req.onsuccess = () => { DB = req.result; resolve(); };
     req.onerror = () => reject(req.error);
@@ -120,6 +123,12 @@ export async function migrerBibliothequeInstrus() {
     await sauverInstru(i);
   }
 }
+
+// Sons des pads (ad-libs/effets, ArrayBuffer + type) : banque globale commune à
+// tous les morceaux, hors backup/export. Joués en direct par-dessus l'instru.
+export function listerSons() { return sur(() => attendre(store('sons', 'readonly').getAll())); }
+export function sauverSon(s) { return sur(() => attendre(store('sons', 'readwrite').put(s))); }
+export function supprimerSon(id) { return sur(() => attendre(store('sons', 'readwrite').delete(id))); }
 
 // Remplace entièrement les morceaux et le coffre par ceux d'un état (restauration).
 export function remplacer(e) {

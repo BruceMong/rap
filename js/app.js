@@ -21,6 +21,7 @@ async function router() {
   const h = location.hash.slice(1);
   if (!h.startsWith('m=')) {
     try { const { demonterInstru } = await import('./ui-instru.js'); demonterInstru(); } catch { /* ignore */ }
+    try { const { demonterPads } = await import('./ui-pads.js'); demonterPads(); } catch { /* ignore */ }
   }
   try {
     if (h.startsWith('m=')) {

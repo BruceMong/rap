@@ -6,6 +6,7 @@ import {
   sauverCoffre, getCoffre, exporter, etat, remplacer,
   getInstrus, sauverInstru, supprimerInstru, StockageIndisponible,
   listerInstrus, getInstru, getInstrusDuMorceau, migrerBibliothequeInstrus,
+  listerSons, sauverSon, supprimerSon,
 } from '../js/store.js';
 
 test('ouvre et fait l’aller-retour d’un morceau', async () => {
@@ -94,4 +95,17 @@ test('migration : instru legacy (morceauId) → morceauIds, idempotent', async (
 
   await migrerBibliothequeInstrus(); // 2e passage : ne touche à rien
   assert.deepEqual((await getInstru('g1')).morceauIds, ['mg1']);
+});
+
+test('sons (pads) : aller-retour, suppression, et hors backup', async () => {
+  await ouvrir();
+  const buf = new TextEncoder().encode('bruh').buffer;
+  await sauverSon({ id: 's1', nom: 'brrr', type: 'audio/wav', buf, ordre: 0, creeLe: Date.now() });
+  await sauverSon({ id: 's2', nom: 'skrrt', type: 'audio/wav', buf, ordre: 1, creeLe: Date.now() });
+  const tous = await listerSons();
+  assert.ok(tous.some((x) => x.id === 's1') && tous.some((x) => x.id === 's2'));
+  const e = await etat();
+  assert.ok(!('sons' in e)); // les pads ne partent pas dans la sauvegarde
+  await supprimerSon('s1');
+  assert.ok(!(await listerSons()).some((x) => x.id === 's1'));
 });

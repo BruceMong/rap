@@ -14,6 +14,7 @@ import { chargerDico, dicoPret } from './dico.js';
 import { surlignageActif, basculerSurlignage } from './reglages.js';
 import { planifier as planifierBackup } from './backup.js';
 import { monterInstru, demonterInstru } from './ui-instru.js';
+import { monterPads, demonterPads } from './ui-pads.js';
 
 let M = null;            // morceau courant (état de l'écran)
 let appEl = null;
@@ -151,7 +152,7 @@ function dessiner() {
 
   document.getElementById('retour').addEventListener('click', async () => {
     await sauverMaintenant();
-    demonterInstru();
+    demonterInstru(); demonterPads();
     location.hash = '';
   });
   document.getElementById('statut').addEventListener('click', async () => {
@@ -243,8 +244,9 @@ function dessiner() {
   majPiedsEtRimes();
   // Rafraîchit une fois le dico chargé en différé (valeurs d'abord via G2P).
   chargerDico().then(majPiedsEtRimes).catch(() => {});
-  // Barre d'instru (hors #app, ne se recrée pas à chaque redessin).
+  // Barre d'instru + pads (hors #app, ne se recréent pas à chaque redessin).
   monterInstru(M.id);
+  monterPads();
 }
 
 // Cherche/supprime un essai dans les vraies listes (placards de lignes + détachés).
@@ -404,10 +406,11 @@ function dessinerLecture() {
       : `<p class="vide">${vue === 'scene' ? 'Aucun vers gardé (✓).' : 'Aucun vers gardé ou à tester.'}</p>`}
   `;
   document.getElementById('retour').addEventListener('click', async () => {
-    await sauverMaintenant(); demonterInstru(); location.hash = '';
+    await sauverMaintenant(); demonterInstru(); demonterPads(); location.hash = '';
   });
   document.getElementById('vue').addEventListener('click', cyclerVue);
   monterInstru(M.id);
+  monterPads();
 }
 
 // Glisser une ligne par sa poignée, façon Notion : par défaut on la déplace (un
