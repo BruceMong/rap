@@ -1,6 +1,6 @@
 // Service worker : précache l'app shell, cache-first même origine, dico mis en
 // cache au premier chargement différé. Les polices Google (autre origine) passent.
-const CACHE = 'rap-v3';
+const CACHE = 'rap-v4';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon.svg',
   'js/app.js', 'js/dico.js', 'js/phonetique.js', 'js/syllabes.js', 'js/rimes.js',
