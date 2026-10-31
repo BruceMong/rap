@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   creerMorceau, ajouterLigne, modifierLigne, basculerValide,
   supprimerLigne, ajouterPlacard, envoyerIdeeVersMorceau, morceauDepuisTexte,
+  rangerDansLigne,
 } from '../js/model.js';
 
 test('creerMorceau : en cours, sans ligne ni détaché', () => {
@@ -68,6 +69,25 @@ test('morceauDepuisTexte : une ligne (en travaux) par ligne non vide', () => {
   assert.equal(m.lignes[1].texte, 'Ligne deux');
   assert.equal(m.lignes[0].valide, false);
   assert.ok(m.lignes[0].id && m.lignes[1].id !== m.lignes[0].id);
+});
+
+test('rangerDansLigne : la source devient un essai de la cible, retirée des lignes', () => {
+  let m = ajouterLigne(ajouterLigne(creerMorceau('t'), 'cible'), 'source');
+  const [cible, source] = m.lignes;
+  m = rangerDansLigne(m, source.id, cible.id);
+  assert.equal(m.lignes.length, 1);
+  assert.equal(m.lignes[0].id, cible.id);
+  assert.equal(m.lignes[0].placards.length, 1);
+  assert.equal(m.lignes[0].placards[0].texte, 'source');
+});
+
+test('rangerDansLigne : emporte les placards de la source comme sous-essais', () => {
+  let m = ajouterLigne(ajouterLigne(creerMorceau('t'), 'cible'), 'source');
+  const [cible, source] = m.lignes;
+  m = ajouterPlacard(m, source.id, 'variante de source');
+  m = rangerDansLigne(m, source.id, cible.id);
+  assert.equal(m.lignes[0].placards[0].enfants.length, 1);
+  assert.equal(m.lignes[0].placards[0].enfants[0].texte, 'variante de source');
 });
 
 test('envoyerIdeeVersMorceau : hors coffre, en ligne en travaux en fin', () => {

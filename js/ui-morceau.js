@@ -2,7 +2,8 @@
 // imbrication, validation (jaune), brouillons détachés. Persistance débouncée.
 import { getMorceau, sauverMorceau } from './store.js';
 import {
-  ajouterLigne, modifierLigne, basculerValide, supprimerLigne, ajouterPlacard, uid,
+  ajouterLigne, modifierLigne, basculerValide, supprimerLigne, ajouterPlacard,
+  rangerDansLigne, uid,
 } from './model.js';
 import { esc, autoGrow, alerteStockage } from './ui-util.js';
 import { compterPieds } from './syllabes.js';
@@ -17,6 +18,7 @@ let appEl = null;
 const ouverts = new Set(); // ids de lignes dont le placard est déplié
 let timer = null;
 let cible = null;          // { id, pos } : dernier curseur dans une ligne (cible d'insertion)
+let scene = false;         // mode « scène » : n'affiche que les lignes validées
 
 function sauverBientot() {
   clearTimeout(timer);
@@ -64,6 +66,7 @@ export async function rendreMorceau(app, id) {
   appEl = app;
   M = await getMorceau(id);
   if (!M) { location.hash = ''; return; }
+  scene = false;
   fermerPanneau();
   installerFlush();
   dessiner();
@@ -89,6 +92,7 @@ function ligneHTML(l) {
     </div></div></div>`;
   return `<div class="bloc-ligne${ouvert}" data-ligne="${esc(l.id)}">
       <div class="ligne-row${l.valide ? ' valide' : ''}">
+        <span class="poignee" title="glisser pour ranger dans une autre ligne">⠿</span>
         <span class="pieds" data-pieds="${esc(l.id)}"></span>
         <textarea class="ligne-edit" rows="1" data-ligne="${esc(l.id)}" placeholder="écris un vers…">${esc(l.texte)}</textarea>
         <span class="ligne-actions">
@@ -104,6 +108,7 @@ function ligneHTML(l) {
 }
 
 function dessiner() {
+  if (scene) { dessinerScene(); return; }
   const detaches = M.detaches.length ? `
     <div class="sect-label">Brouillons détachés</div>
     <div class="detaches"><div class="placard-pad">
@@ -114,9 +119,11 @@ function dessiner() {
     <div class="app-head">
       <button class="lien-retour" id="retour">← mes morceaux</button><span class="spacer"></span>
       <button class="icon-btn ${surlignageActif() ? 'actif' : ''}" id="rimes" title="surlignage des rimes">rimes</button>
+      <button class="icon-btn" id="scene" title="ne montrer que les vers validés">scène</button>
       <button class="icon-btn" id="statut">${M.statut === 'fini' ? '✓ fini' : 'en cours'}</button>
     </div>
     <input class="titre-morceau" id="titre" placeholder="Titre du morceau" value="${esc(M.titre)}">
+    <p class="aide-drag">Tire la poignée ⠿ d'une ligne et lâche-la sur une autre pour la ranger dedans.</p>
     <div class="lignes" id="lignes">${M.lignes.map(ligneHTML).join('')}</div>
     <button class="add-ligne" id="add-ligne">+ une ligne</button>
     ${detaches}
@@ -136,6 +143,7 @@ function dessiner() {
     e.currentTarget.classList.toggle('actif', actif);
     majPiedsEtRimes();
   });
+  document.getElementById('scene').addEventListener('click', () => { scene = true; dessiner(); });
   const titre = document.getElementById('titre');
   titre.addEventListener('input', () => { M.titre = titre.value; sauverBientot(); });
 
@@ -208,6 +216,8 @@ function dessiner() {
     await sauverMaintenant(); dessiner();
   }));
 
+  appEl.querySelectorAll('.bloc-ligne').forEach(attacherDrag);
+
   majPiedsEtRimes();
   // Rafraîchit une fois le dico chargé en différé (valeurs d'abord via G2P).
   chargerDico().then(majPiedsEtRimes).catch(() => {});
@@ -279,6 +289,68 @@ function ouvrirPanneauRimes(mot) {
     liste.querySelectorAll('[data-mot]').forEach((b) => b.addEventListener('click', () => inserer(b.dataset.mot)));
   };
   if (dicoPret()) remplir(); else chargerDico().then(remplir).catch(() => {});
+}
+
+// Mode « scène » : lecture propre des seules lignes validées, pour rapper.
+function dessinerScene() {
+  const validees = M.lignes.filter((l) => l.valide);
+  appEl.innerHTML = `
+    <div class="app-head">
+      <button class="lien-retour" id="retour">← mes morceaux</button><span class="spacer"></span>
+      <button class="icon-btn actif" id="scene-off" title="revenir à l'édition">scène</button>
+    </div>
+    <h1 class="scene-titre">${esc(M.titre || 'Sans titre')}</h1>
+    ${validees.length
+      ? `<div class="scene-texte">${validees.map((l) => `<p>${esc(l.texte)}</p>`).join('')}</div>`
+      : '<p class="vide">Valide des vers avec ✓ en mode édition pour les retrouver ici.</p>'}
+  `;
+  document.getElementById('retour').addEventListener('click', async () => {
+    await sauverMaintenant(); demonterInstru(); location.hash = '';
+  });
+  document.getElementById('scene-off').addEventListener('click', () => { scene = false; dessiner(); });
+  monterInstru(M.id);
+}
+
+// Glisser une ligne (par sa poignée) et la lâcher sur une autre : la ranger dedans.
+function attacherDrag(bloc) {
+  const poignee = bloc.querySelector('.poignee');
+  if (!poignee) return;
+  poignee.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    const sourceId = bloc.dataset.ligne;
+    let cibleEl = null;
+    bloc.classList.add('drag-source');
+    document.body.classList.add('drag-en-cours');
+    try { poignee.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+
+    const move = (ev) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY);
+      const over = el && el.closest('.bloc-ligne');
+      const nouvelle = (over && over !== bloc) ? over : null;
+      if (cibleEl !== nouvelle) {
+        if (cibleEl) cibleEl.classList.remove('drag-cible');
+        cibleEl = nouvelle;
+        if (cibleEl) cibleEl.classList.add('drag-cible');
+      }
+    };
+    const up = async () => {
+      poignee.removeEventListener('pointermove', move);
+      poignee.removeEventListener('pointerup', up);
+      poignee.removeEventListener('pointercancel', up);
+      bloc.classList.remove('drag-source');
+      document.body.classList.remove('drag-en-cours');
+      const relache = cibleEl;
+      if (cibleEl) cibleEl.classList.remove('drag-cible');
+      if (relache) {
+        M = rangerDansLigne(M, sourceId, relache.dataset.ligne);
+        ouverts.add(relache.dataset.ligne);
+        await sauverMaintenant(); dessiner();
+      }
+    };
+    poignee.addEventListener('pointermove', move);
+    poignee.addEventListener('pointerup', up);
+    poignee.addEventListener('pointercancel', up);
+  });
 }
 
 // Compteur de pieds (toujours) + schéma de rime en barres colorées (si activé).

@@ -74,6 +74,21 @@ export function morceauDepuisTexte(texte, titre = '') {
   return { ...m, lignes, modifieLe: Date.now() };
 }
 
+// Range une ligne DANS une autre : la ligne source devient un essai (placard) de
+// la ligne cible (ses propres placards deviennent des sous-essais). Pour le drag.
+export function rangerDansLigne(m, sourceId, cibleId) {
+  if (sourceId === cibleId) return m;
+  const src = m.lignes.find((l) => l.id === sourceId);
+  const cible = m.lignes.find((l) => l.id === cibleId);
+  if (!src || !cible) return m;
+  const idee = { id: uid(), texte: src.texte, enfants: src.placards };
+  return touch(m, {
+    lignes: m.lignes
+      .filter((l) => l.id !== sourceId)
+      .map((l) => (l.id === cibleId ? { ...l, placards: [...l.placards, idee] } : l)),
+  });
+}
+
 // Retire l'idée du coffre et l'ajoute en nouvelle ligne en travaux en fin de m.
 export function envoyerIdeeVersMorceau(coffre, ideeId, m) {
   const idee = coffre.find((i) => i.id === ideeId);
