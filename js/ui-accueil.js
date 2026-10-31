@@ -1,6 +1,6 @@
 // Écran d'accueil : coffre à idées transversal + morceaux en cours / terminés.
 import { listerMorceaux, getCoffre, sauverCoffre, sauverMorceau, getMorceau } from './store.js';
-import { creerMorceau, envoyerIdeeVersMorceau, uid } from './model.js';
+import { creerMorceau, envoyerIdeeVersMorceau, morceauDepuisTexte, uid } from './model.js';
 import { esc, dateRelative, alerteStockage } from './ui-util.js';
 import { planifier as planifierBackup } from './backup.js';
 
@@ -59,7 +59,10 @@ export async function rendreAccueil(app) {
     ${finis.length ? `<div class="sect-label">Terminés</div>
       <div class="morceaux">${finis.map(carte).join('')}</div>` : ''}
 
-    <div class="fab"><button id="nouveau">+ Nouveau morceau</button></div>
+    <div class="fab">
+      <button id="coller" class="icon-btn" style="padding:13px 18px;border-radius:26px">Coller un texte</button>
+      <button id="nouveau">+ Nouveau morceau</button>
+    </div>
   `;
 
   app.querySelectorAll('.morceau').forEach((btn) => {
@@ -80,6 +83,29 @@ export async function rendreAccueil(app) {
   });
 
   document.getElementById('btn-apropos').addEventListener('click', () => { location.hash = 'apropos'; });
+  document.getElementById('coller').addEventListener('click', () => ouvrirColler(app));
+}
+
+// Crée un morceau à partir d'un bloc de texte collé (ex. depuis le bloc-notes).
+function ouvrirColler(app) {
+  app.innerHTML = `
+    <div class="app-head"><button class="lien-retour" id="annuler">← annuler</button></div>
+    <h1 style="font-family:var(--font-display);font-size:22px;margin:4px 0 6px">Coller un texte</h1>
+    <p class="vide" style="margin:0 0 10px">Colle ton texte : chaque ligne devient une ligne du morceau. Tu rangeras ensuite en plaçant les brouillons dans les placards.</p>
+    <textarea id="coller-zone" placeholder="colle ton texte ici…"
+      style="width:100%;min-height:50vh;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:12px;padding:12px;font:inherit;font-size:15px;line-height:1.5;resize:vertical"></textarea>
+    <div class="fab"><button id="creer">Créer le morceau</button></div>
+  `;
+  document.getElementById('annuler').addEventListener('click', () => rendreAccueil(app));
+  document.getElementById('coller-zone').focus();
+  document.getElementById('creer').addEventListener('click', async () => {
+    const t = document.getElementById('coller-zone').value;
+    if (!t.trim()) { location.hash = ''; return; }
+    const m = morceauDepuisTexte(t);
+    try { await sauverMorceau(m); } catch { alerteStockage(); return; }
+    planifierBackup();
+    location.hash = 'm=' + m.id;
+  });
 }
 
 function ajouterIdee(app, coffre) {
