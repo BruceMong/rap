@@ -60,10 +60,10 @@ function carteHTML(i) {
       <button class="instru-btn" data-rew="${esc(i.id)}" title="−5 s">«</button>
       <button class="instru-btn" data-pp="${esc(i.id)}">▶</button>
       <button class="instru-btn" data-ff="${esc(i.id)}" title="+5 s">»</button>
-      <input type="range" class="instru-seek" data-seek="${esc(i.id)}" min="0" max="100" step="0.1" value="0">
       <span class="instru-temps" data-temps="${esc(i.id)}">0:00</span>
       <button class="instru-btn ${boucle ? 'actif' : ''}" data-mode="${esc(i.id)}">${boucle ? 'boucle' : 'normal'}</button>
     </div>
+    <input type="range" class="ic-seek" data-seek="${esc(i.id)}" min="0" max="100" step="0.05" value="0" title="position dans le son">
     ${boucle ? reglageBoucleHTML(i) : ''}
     <label class="ic-source-l">Lien source
       <input class="ic-source" data-source="${esc(i.id)}" value="${esc(src)}" placeholder="ex. lien YouTube de l'instru (note, aucun téléchargement)">

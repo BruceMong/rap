@@ -119,6 +119,16 @@ export function insererLigneApres(m, ligneId, texte = '') {
   return majActive(m, { lignes });
 }
 
+// Insère une ligne AVANT la ligne donnée (bulle « + » entre deux lignes, ou tout
+// en haut). Si l'id est introuvable, insère en tête.
+export function insererLigneAvant(m, ligneId, texte = '') {
+  m = migrerMorceau(m);
+  const lignes = [...versionActive(m).lignes];
+  const i = lignes.findIndex((l) => l.id === ligneId);
+  lignes.splice(i < 0 ? 0 : i, 0, { id: uid(), texte, valide: false, test: false, placards: [] });
+  return majActive(m, { lignes });
+}
+
 export function supprimerLigne(m, ligneId) {
   m = migrerMorceau(m);
   const va = versionActive(m);

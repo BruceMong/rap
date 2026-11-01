@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   creerMorceau, ajouterLigne, modifierLigne, basculerValide,
   supprimerLigne, ajouterPlacard, envoyerIdeeVersMorceau, morceauDepuisTexte,
-  rangerDansLigne, basculerTest, insererLigneApres, deplacerLigne,
+  rangerDansLigne, basculerTest, insererLigneApres, insererLigneAvant, deplacerLigne,
   versionActive, migrerMorceau, creerVersion, nouvelleVersionDepuisGardes,
   changerVersion, renommerVersion, supprimerVersion,
   cyclerEtatLigne, cyclerEtatIdee,
@@ -157,6 +157,15 @@ test('supprimerVersion ne supprime jamais la dernière', () => {
   const m = creerMorceau('t');
   const r = supprimerVersion(m, m.versionActiveId);
   assert.equal(r.versions.length, 1);
+});
+
+test('insererLigneAvant : insère entre deux lignes et tout en haut', () => {
+  let m = morceauDepuisTexte('A\nB\nC');
+  const [a, b] = L(m).map((l) => l.id);
+  m = insererLigneAvant(m, b, 'X'); // entre A et B
+  assert.deepEqual(L(m).map((l) => l.texte), ['A', 'X', 'B', 'C']);
+  m = insererLigneAvant(m, a, 'TOP'); // tout en haut
+  assert.deepEqual(L(m).map((l) => l.texte), ['TOP', 'A', 'X', 'B', 'C']);
 });
 
 test('cyclerEtatLigne : normal → test → gardé → normal', () => {

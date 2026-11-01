@@ -3,7 +3,7 @@
 import { getMorceau, sauverMorceau, memoIds, getMemo, sauverMemo, supprimerMemo } from './store.js';
 import {
   ajouterLigne, modifierLigne, basculerValide, basculerTest, supprimerLigne, ajouterPlacard,
-  rangerDansLigne, insererLigneApres, deplacerLigne, uid,
+  rangerDansLigne, insererLigneApres, insererLigneAvant, deplacerLigne, uid,
   versionActive, migrerMorceau, creerVersion, nouvelleVersionDepuisGardes,
   changerVersion, renommerVersion, supprimerVersion,
   cyclerEtatLigne, cyclerEtatIdee,
@@ -123,6 +123,11 @@ function essaiHTML(idee) {
     </div>`;
 }
 
+// Bulle « + » dans la gouttière : insère une ligne juste avant `avantId`.
+function interHTML(avantId) {
+  return `<button class="inter-ligne" data-avant="${esc(avantId)}" title="insérer une ligne ici" aria-label="insérer une ligne"><span>+</span></button>`;
+}
+
 function ligneHTML(l) {
   const ouvert = ouverts.has(l.id) ? ' ouvert' : '';
   const np = l.placards.length;
@@ -171,7 +176,7 @@ function dessiner() {
       <button class="ver-add" id="ver-plus" title="gérer les versions">⋯</button>
     </div>
     <p class="aide-drag">Tire la poignée ⠿ pour déplacer une ligne ; reste sur une ligne pour la ranger dedans.</p>
-    <div class="lignes" id="lignes">${lignesA().map(ligneHTML).join('')}</div>
+    <div class="lignes" id="lignes">${lignesA().map((l) => interHTML(l.id) + ligneHTML(l)).join('')}</div>
     <button class="add-ligne" id="add-ligne">+ une ligne</button>
     ${detaches}
   `;
@@ -203,6 +208,15 @@ function dessiner() {
     const tas = appEl.querySelectorAll('.ligne-edit');
     if (tas.length) tas[tas.length - 1].focus();
   });
+
+  appEl.querySelectorAll('.inter-ligne').forEach((b) => b.addEventListener('click', async () => {
+    const id = b.dataset.avant;
+    const idx = lignesA().findIndex((l) => l.id === id); // la nouvelle ligne prendra cet index
+    M = insererLigneAvant(M, id, '');
+    await sauverMaintenant(); dessiner();
+    const tas = appEl.querySelectorAll('.ligne-edit');
+    if (idx >= 0 && tas[idx]) tas[idx].focus();
+  }));
 
   // textarea de lignes
   appEl.querySelectorAll('.ligne-edit').forEach((ta) => {
