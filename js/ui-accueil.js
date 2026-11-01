@@ -43,16 +43,14 @@ function trier(a, b) {
   return (b.epingle ? 1 : 0) - (a.epingle ? 1 : 0) || activite(b) - activite(a);
 }
 
-// Affiche la version applicative (nom du cache du service worker, p. ex. « v10 »)
-// en petit près du titre. Source unique : le SW → reflète la version réellement
-// active sur l'appareil, pratique pour vérifier qu'une mise à jour est bien passée.
-async function afficherVersion() {
+// Version applicative affichée près du titre. Constante dans le CODE (et non lue
+// du cache du service worker, qui se met à jour un chargement trop tôt) : « vXX »
+// visible = ce code-ci tourne vraiment sur l'appareil. À garder synchro avec CACHE
+// dans sw.js à chaque déploiement.
+const APP_VERSION = 'v15';
+function afficherVersion() {
   const el = document.getElementById('app-version');
-  if (!el || !('caches' in window)) return;
-  try {
-    const cle = (await caches.keys()).find((k) => /^rap-v/.test(k));
-    if (cle) el.textContent = cle.replace('rap-', '');
-  } catch { /* ignore */ }
+  if (el) el.textContent = APP_VERSION;
 }
 
 export async function rendreAccueil(app) {
