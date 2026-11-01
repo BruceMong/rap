@@ -232,12 +232,27 @@ body.drag-en-cours .ligne-edit { pointer-events: none; }
   padding: 0 4px; margin-left: 2px; border-radius: 9px; background: var(--accent); color: var(--on-accent);
   font-size: 10px; font-weight: 600; vertical-align: middle; }
 
-/* menu compact d'une ligne */
-.menu-ligne { display: flex; gap: 8px; flex-wrap: wrap; margin: 2px 6px 8px 26px; }
-.menu-ligne button { background: var(--fill-faint); border: 1px solid var(--line); color: var(--fg);
-  border-radius: 8px; font: inherit; font-size: 12.5px; padding: 6px 10px; cursor: pointer; }
-.menu-ligne button:hover { border-color: var(--accent); }
-.menu-ligne button.actif { color: var(--on-accent); background: var(--r1); border-color: var(--r1); }
+/* Feuille d'actions d'une ligne (bottom sheet) */
+.feuille-fond { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.45);
+  display: flex; align-items: flex-end; justify-content: center; opacity: 0; transition: opacity .18s; }
+.feuille-fond.ouvert { opacity: 1; }
+.feuille { width: 100%; max-width: 480px; background: var(--surface); border-radius: 18px 18px 0 0;
+  padding: 6px 12px calc(14px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; gap: 8px;
+  transform: translateY(100%); transition: transform .22s ease; }
+.feuille-fond.ouvert .feuille { transform: translateY(0); }
+.feuille-poignee { width: 40px; height: 4px; border-radius: 999px; background: var(--line); margin: 6px auto 2px; }
+.feuille-tete { font-size: 13px; color: var(--muted); padding: 0 6px 8px; border-bottom: 1px solid var(--line);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feuille-groupe { display: flex; flex-direction: column; gap: 2px; }
+.feuille-groupe + .feuille-groupe { border-top: 1px solid var(--line); padding-top: 6px; }
+.feuille-act { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  background: none; border: none; color: var(--fg); font: inherit; font-size: 15.5px;
+  padding: 13px 8px; border-radius: 10px; cursor: pointer; }
+.feuille-act:hover, .feuille-act:active { background: var(--fill-faint); }
+.feuille-act.actif { color: var(--accent); }
+.feuille-act.danger { color: var(--sys-red, #c2410c); }
+.feuille-act .fa-ic { width: 22px; text-align: center; font-size: 16px; flex: none; }
 
 /* barre de versions */
 .versions-bar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 8px 0 2px; }

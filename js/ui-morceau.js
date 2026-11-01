@@ -252,7 +252,7 @@ function dessiner() {
 
   appEl.querySelectorAll('[data-menu-ligne]').forEach((b) => b.addEventListener('click', (e) => {
     e.stopPropagation();
-    ouvrirMenuLigne(b.dataset.menuLigne, b.closest('.bloc-ligne'));
+    ouvrirFeuilleLigne(b.dataset.menuLigne);
   }));
 
   // essais
@@ -331,44 +331,79 @@ function supprimerEssai(id) {
   retirerIdee(detachesA(), id);
 }
 
-// Menu compact d'une ligne : à tester (vert), rimes, insérer dessous, supprimer.
-function ouvrirMenuLigne(id, bloc) {
-  if (!bloc) return;
-  const ex = bloc.querySelector('.menu-ligne');
-  if (ex) { ex.remove(); return; }
+// Feuille d'actions d'une ligne (bottom sheet) : glisse depuis le bas, grandes
+// cibles, actions groupées (états / outils / destructif), hors #app pour ne pas
+// être redessinée. Se ferme en tapant le fond ou après une action.
+function fermerFeuille() {
+  const f = document.getElementById('feuille-fond');
+  if (f) { f.classList.remove('ouvert'); setTimeout(() => f.remove(), 200); }
+}
+
+function ouvrirFeuilleLigne(id) {
+  fermerFeuille();
   const l = lignesA().find((x) => x.id === id);
   if (!l) return;
-  const menu = document.createElement('div');
-  menu.className = 'menu-ligne';
-  menu.innerHTML = `
-    <button data-a="test" class="${l.test ? 'actif' : ''}">à tester (vert)</button>
-    <button data-a="garder" class="${l.valide ? 'actif' : ''}">garder (jaune)</button>
-    <button data-a="rimes">rimes ♪</button>
-    <button data-a="inserer">insérer dessous</button>
-    ${memos.has(id) ? '<button data-a="memo-suppr">supprimer le mémo vocal</button>' : ''}
-    <button data-a="suppr">supprimer</button>`;
-  bloc.querySelector('.ligne-row').insertAdjacentElement('afterend', menu);
-  menu.querySelector('[data-a="garder"]').addEventListener('click', async () => {
-    M = basculerValide(M, id); await sauverMaintenant(); dessiner();
+  const aMemo = memos.has(id);
+  const apercu = (l.texte && l.texte.trim()) ? l.texte.trim() : 'Ligne vide';
+  const fond = document.createElement('div');
+  fond.className = 'feuille-fond';
+  fond.id = 'feuille-fond';
+  fond.innerHTML = `
+    <div class="feuille" role="menu">
+      <div class="feuille-poignee"></div>
+      <div class="feuille-tete">${esc(apercu)}</div>
+      <div class="feuille-groupe">
+        <button class="feuille-act${l.test ? ' actif' : ''}" data-a="test"><span class="fa-ic">🟢</span>À tester${l.test ? ' ✓' : ''}</button>
+        <button class="feuille-act${l.valide ? ' actif' : ''}" data-a="garder"><span class="fa-ic">🟡</span>Garder${l.valide ? ' ✓' : ''}</button>
+      </div>
+      <div class="feuille-groupe">
+        <button class="feuille-act" data-a="memo"><span class="fa-ic">🎤</span>${aMemo ? 'Écouter le mémo vocal' : 'Enregistrer un mémo vocal'}</button>
+        ${aMemo ? '<button class="feuille-act" data-a="memo-suppr"><span class="fa-ic">🔇</span>Supprimer le mémo</button>' : ''}
+        <button class="feuille-act" data-a="rimes"><span class="fa-ic">♪</span>Rimes</button>
+        <button class="feuille-act" data-a="inserer"><span class="fa-ic">＋</span>Insérer une ligne dessous</button>
+      </div>
+      <div class="feuille-groupe">
+        <button class="feuille-act danger" data-a="suppr"><span class="fa-ic">🗑</span>Supprimer la ligne</button>
+      </div>
+    </div>`;
+  document.body.appendChild(fond);
+  requestAnimationFrame(() => fond.classList.add('ouvert'));
+  const sheet = fond.querySelector('.feuille');
+  fond.addEventListener('click', (e) => { if (e.target === fond) fermerFeuille(); });
+
+  sheet.querySelector('[data-a="test"]').addEventListener('click', async () => {
+    fermerFeuille(); M = basculerTest(M, id); await sauverMaintenant(); dessiner();
   });
-  const memoSuppr = menu.querySelector('[data-a="memo-suppr"]');
-  if (memoSuppr) memoSuppr.addEventListener('click', () => { menu.remove(); supprimerMemoLigne(id); });
-  menu.querySelector('[data-a="test"]').addEventListener('click', async () => {
-    M = basculerTest(M, id); await sauverMaintenant(); dessiner();
+  sheet.querySelector('[data-a="garder"]').addEventListener('click', async () => {
+    fermerFeuille(); M = basculerValide(M, id); await sauverMaintenant(); dessiner();
   });
-  menu.querySelector('[data-a="rimes"]').addEventListener('click', () => {
-    menu.remove();
+  sheet.querySelector('[data-a="memo"]').addEventListener('click', () => {
+    fermerFeuille();
+    if (aMemo) jouerMemo(id); else demarrerMemo(id);
+  });
+  const ms = sheet.querySelector('[data-a="memo-suppr"]');
+  if (ms) ms.addEventListener('click', () => { fermerFeuille(); supprimerMemoLigne(id); });
+  sheet.querySelector('[data-a="rimes"]').addEventListener('click', () => {
+    fermerFeuille();
     const mot = dernierMotDe(l.texte);
     if (mot) ouvrirPanneauRimes(mot);
   });
-  menu.querySelector('[data-a="inserer"]').addEventListener('click', async () => {
+  sheet.querySelector('[data-a="inserer"]').addEventListener('click', async () => {
+    fermerFeuille();
     M = insererLigneApres(M, id, '');
     await sauverMaintenant(); dessiner();
     const bl = appEl.querySelector(`.bloc-ligne[data-ligne="${CSS.escape(id)}"]`);
     const ta = bl && bl.nextElementSibling && bl.nextElementSibling.querySelector('.ligne-edit');
     if (ta) ta.focus();
   });
-  menu.querySelector('[data-a="suppr"]').addEventListener('click', async () => {
+  const suppr = sheet.querySelector('[data-a="suppr"]');
+  suppr.addEventListener('click', async () => {
+    if (suppr.dataset.sure !== '1') {
+      suppr.dataset.sure = '1';
+      suppr.innerHTML = '<span class="fa-ic">🗑</span>Confirmer la suppression';
+      return;
+    }
+    fermerFeuille();
     if (memos.has(id)) { supprimerMemo(id).catch(() => {}); memos.delete(id); }
     M = supprimerLigne(M, id); await sauverMaintenant(); dessiner();
   });
@@ -695,7 +730,7 @@ async function supprimerMemoLigne(id) {
 }
 
 async function retourAccueil() {
-  arreterMemo(); stopMemoAudio();
+  fermerFeuille(); arreterMemo(); stopMemoAudio();
   await sauverMaintenant();
   demonterInstru(); demonterPads();
   location.hash = '';
