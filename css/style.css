@@ -343,6 +343,9 @@ body.drag-en-cours .ligne-edit { pointer-events: none; }
   margin-top: -8px; border: none; border-radius: 50%; background: var(--accent); }
 .ic-seek::-moz-range-track { height: 8px; border-radius: 999px; background: var(--fill); }
 .ic-seek::-moz-range-thumb { width: 24px; height: 24px; border: none; border-radius: 50%; background: var(--accent); }
+/* Waveform (spectre de volume) */
+.ic-wave { display: block; width: 100%; height: 48px; background: var(--fill-faint);
+  border-radius: 8px; }
 .ic-boucle { display: flex; flex-direction: column; gap: 8px; background: var(--fill-faint);
   border-radius: 10px; padding: 10px; }
 .ic-borne { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -383,9 +386,22 @@ body.drag-en-cours .ligne-edit { pointer-events: none; }
   border: 1px solid var(--line); border-top: 3px solid var(--pad, var(--accent)); border-radius: 12px; padding: 8px; }
 .pad-nom { width: 100%; background: var(--surface); border: 1px solid var(--line); color: var(--fg);
   border-radius: 8px; font: inherit; font-size: 12px; padding: 6px; }
-.pad-del { align-self: flex-end; background: none; border: 1px solid var(--line); color: var(--muted);
+.pad-edit-btns { display: flex; gap: 6px; }
+.pad-regler, .pad-del { flex: 1; background: none; border: 1px solid var(--line); color: var(--muted);
   border-radius: 8px; font: inherit; font-size: 12px; padding: 4px 8px; cursor: pointer; }
+.pad-regler:hover { color: var(--accent); border-color: var(--accent); }
 .pad-del:hover { color: var(--sys-red, #c2410c); border-color: var(--sys-red, #c2410c); }
+/* Éditeur d'un pad */
+.pe-nom { font-family: var(--font-display); font-weight: 600; font-size: 16px; margin: 4px 2px 8px; }
+.pe-wave { display: block; width: 100%; height: 72px; background: var(--fill-faint); border-radius: 10px; }
+.pe-champ { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted);
+  margin-top: 12px; }
+.pe-champ span { color: var(--fg); }
+.pe-trim { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.pe-borne { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.pe-borne > span:first-child { width: 42px; flex: none; }
+.pe-borne .ic-seek { flex: 1; }
+.pe-borne .ic-mmss { margin-left: 0; }
 .pads-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .pads-actions .rec { color: #fff; background: var(--sys-red, #c2410c); border-color: var(--sys-red, #c2410c);
   animation: pad-rec 1s steps(2, start) infinite; }

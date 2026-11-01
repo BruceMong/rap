@@ -28,7 +28,8 @@ export async function precharger(son) {
   buffers.set(son.id, audioBuf);
 }
 
-// Joue le son tout de suite (one-shot). Précharge au besoin. Renvoie la source,
+// Joue le son tout de suite (one-shot). Précharge au besoin. Applique le volume
+// (son.volume 0..1) et le rognage (son.trimStart/trimEnd en s). Renvoie la source,
 // ou null si le décodage échoue (format non lisible).
 export async function jouer(son) {
   const c = assurerContexte();
@@ -37,11 +38,22 @@ export async function jouer(son) {
   } catch {
     return null;
   }
+  const buf = buffers.get(son.id);
   const src = c.createBufferSource();
-  src.buffer = buffers.get(son.id);
-  src.connect(c.destination);
-  src.start();
+  src.buffer = buf;
+  const gain = c.createGain();
+  gain.gain.value = (son.volume == null ? 1 : son.volume);
+  src.connect(gain).connect(c.destination);
+  const a = Math.max(0, son.trimStart || 0);
+  const b = (son.trimEnd && son.trimEnd > a) ? Math.min(son.trimEnd, buf.duration) : buf.duration;
+  src.start(0, a, Math.max(0.02, b - a));
   return src;
+}
+
+// Durée (s) d'un son, pour l'éditeur. Précharge au besoin.
+export async function duree(son) {
+  if (!buffers.has(son.id)) { try { await precharger(son); } catch { return 0; } }
+  return buffers.get(son.id).duration || 0;
 }
 
 // Oublie le buffer d'un son (après suppression/remplacement).

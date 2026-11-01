@@ -3,13 +3,15 @@
 // Banque globale (store `sons`), commune à tous les morceaux. Ajout par import de
 // fichier ou enregistrement micro ; renommage/suppression en mode édition.
 import { listerSons, sauverSon, supprimerSon } from './store.js';
-import { reveiller, jouer, precharger, oublier } from './pads.js';
+import { reveiller, jouer, precharger, oublier, duree } from './pads.js';
 import { uid } from './model.js';
 import { esc, alerteStockage } from './ui-util.js';
+import { calculerPeaks, dessiner as dessinerWave, oublier as oublierWave } from './waveform.js';
 
 let sons = [];
 let ouvert = false;
 let edition = false;
+let editId = null;      // id du son en cours de réglage (éditeur dédié)
 let mediaRec = null;
 let chunks = [];
 
@@ -57,6 +59,7 @@ function couleur(i) { return `var(--r${i % 8})`; }
 function rendre() {
   const ov = document.getElementById('pads-overlay');
   if (!ov) return;
+  if (editId) { rendreEditeur(ov); return; }
   const grille = sons.length
     ? `<div class="pads-grille">${sons.map((s, i) => padHTML(s, i)).join('')}</div>`
     : '<p class="vide" style="padding:16px 4px">Aucun son. Importe un fichier ou enregistre-toi au micro.</p>';
@@ -87,6 +90,7 @@ function rendre() {
     if (s) { s.nom = inp.value; sauverSon(s).catch(alerteStockage); }
   }));
   ov.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', () => confirmerSuppr(b)));
+  ov.querySelectorAll('[data-regler]').forEach((b) => b.addEventListener('click', () => { editId = b.dataset.regler; rendre(); }));
 
   ov.querySelector('#pads-edit').addEventListener('click', () => { edition = !edition; rendre(); });
   ov.querySelector('#pads-close').addEventListener('click', toggle);
@@ -99,10 +103,79 @@ function padHTML(s, i) {
   if (edition) {
     return `<div class="pad pad-edit" style="--pad:${couleur(i)}">
       <input class="pad-nom" data-nom="${esc(s.id)}" value="${esc(s.nom)}" placeholder="nom">
-      <button class="pad-del" data-del="${esc(s.id)}" title="supprimer">✕</button>
+      <div class="pad-edit-btns">
+        <button class="pad-regler" data-regler="${esc(s.id)}" title="régler (volume, rogner)">⚙</button>
+        <button class="pad-del" data-del="${esc(s.id)}" title="supprimer">✕</button>
+      </div>
     </div>`;
   }
   return `<button class="pad" data-pad="${esc(s.id)}" style="--pad:${couleur(i)}">${esc(s.nom)}</button>`;
+}
+
+// Éditeur d'un son : waveform, volume, rognage début/fin, écouter.
+async function rendreEditeur(ov) {
+  const s = sons.find((x) => x.id === editId);
+  if (!s) { editId = null; rendre(); return; }
+  ov.innerHTML = `
+    <div class="pads-tete">
+      <button class="icon-btn" id="pe-retour">← pads</button>
+      <span style="flex:1"></span>
+      <button class="icon-btn" id="pe-play">▶ écouter</button>
+    </div>
+    <div class="pe-nom">${esc(s.nom)}</div>
+    <canvas class="pe-wave" id="pe-wave"></canvas>
+    <label class="pe-champ">Volume <span id="pe-vol-val">${Math.round((s.volume == null ? 1 : s.volume) * 100)} %</span>
+      <input type="range" class="ic-seek" id="pe-vol" min="0" max="1" step="0.01" value="${s.volume == null ? 1 : s.volume}">
+    </label>
+    <div class="pe-trim">
+      <div class="pe-borne"><span>Début</span>
+        <input type="range" class="ic-seek" id="pe-a" min="0" max="1" step="0.001" value="0">
+        <span class="ic-mmss" id="pe-a-val">0:00.0</span></div>
+      <div class="pe-borne"><span>Fin</span>
+        <input type="range" class="ic-seek" id="pe-b" min="0" max="1" step="0.001" value="1">
+        <span class="ic-mmss" id="pe-b-val">0:00.0</span></div>
+    </div>
+    <div class="pads-msg" id="pads-msg" hidden></div>
+  `;
+  ov.querySelector('#pe-retour').addEventListener('click', () => { editId = null; rendre(); });
+
+  const dur = (await duree(s)) || 0;
+  const a = () => Math.max(0, s.trimStart || 0);
+  const b = () => (s.trimEnd && s.trimEnd > a()) ? Math.min(s.trimEnd, dur) : dur;
+  const fmt = (t) => { const m = Math.floor(t / 60); const r = t % 60; return m + ':' + (r < 10 ? '0' : '') + r.toFixed(1); };
+  const canvas = ov.querySelector('#pe-wave');
+  let peaks = null;
+  const redraw = () => {
+    if (!peaks || !dur) return;
+    dessinerWave(canvas, peaks, { trim: [a() / dur, b() / dur] });
+  };
+  const majVals = () => {
+    ov.querySelector('#pe-a-val').textContent = fmt(a());
+    ov.querySelector('#pe-b-val').textContent = fmt(b());
+    const av = ov.querySelector('#pe-a'); const bv = ov.querySelector('#pe-b');
+    if (dur) { av.value = a() / dur; bv.value = b() / dur; }
+    redraw();
+  };
+  calculerPeaks(s.id, s.buf, s.type).then((r) => { peaks = r.peaks; redraw(); }).catch(() => {});
+  majVals();
+
+  const sauver = () => sauverSon(s).catch(alerteStockage);
+  ov.querySelector('#pe-vol').addEventListener('input', (e) => {
+    s.volume = Number(e.target.value);
+    ov.querySelector('#pe-vol-val').textContent = Math.round(s.volume * 100) + ' %';
+    sauver();
+  });
+  ov.querySelector('#pe-a').addEventListener('input', (e) => {
+    const t = Number(e.target.value) * dur;
+    s.trimStart = Math.min(t, b() - 0.05);
+    sauver(); majVals();
+  });
+  ov.querySelector('#pe-b').addEventListener('input', (e) => {
+    const t = Number(e.target.value) * dur;
+    s.trimEnd = Math.max(t, a() + 0.05);
+    sauver(); majVals();
+  });
+  ov.querySelector('#pe-play').addEventListener('click', () => { reveiller(); jouer(s); });
 }
 
 function message(txt) {
@@ -189,7 +262,7 @@ function confirmerSuppr(btn) {
   }
   const id = btn.dataset.del;
   supprimerSon(id).then(() => {
-    oublier(id);
+    oublier(id); oublierWave(id);
     sons = sons.filter((x) => x.id !== id);
     rendre();
   }).catch(alerteStockage);

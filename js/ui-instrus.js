@@ -5,6 +5,7 @@
 import { listerInstrus, listerMorceaux, sauverInstru, supprimerInstru } from './store.js';
 import { uid } from './model.js';
 import { esc, alerteStockage } from './ui-util.js';
+import { calculerPeaks, dessiner as dessinerWave, oublier as oublierWave } from './waveform.js';
 
 let appEl = null;
 let instrus = [];
@@ -64,6 +65,7 @@ function carteHTML(i) {
       <button class="instru-btn ${boucle ? 'actif' : ''}" data-mode="${esc(i.id)}">${boucle ? 'boucle' : 'normal'}</button>
     </div>
     <input type="range" class="ic-seek" data-seek="${esc(i.id)}" min="0" max="100" step="0.05" value="0" title="position dans le son">
+    <canvas class="ic-wave" data-wave="${esc(i.id)}"></canvas>
     ${boucle ? reglageBoucleHTML(i) : ''}
     <label class="ic-source-l">Lien source
       <input class="ic-source" data-source="${esc(i.id)}" value="${esc(src)}" placeholder="ex. lien YouTube de l'instru (note, aucun téléchargement)">
@@ -139,6 +141,27 @@ function dessiner() {
     if (audio && playId === id) poserBorne(id, borne, clamp(audio.currentTime));
   }));
   appEl.querySelectorAll('[data-ecouter]').forEach((b) => b.addEventListener('click', () => ecouterBoucle(b.dataset.ecouter)));
+
+  dessinerWaves();
+}
+
+// Calcule et dessine la waveform de chaque instru (crêtes), avec repères A/B en
+// mode boucle. Décodage en tâche de fond ; crêtes mises en cache (waveform.js).
+function dessinerWaves() {
+  appEl.querySelectorAll('[data-wave]').forEach((canvas) => {
+    const i = trouver(canvas.dataset.wave);
+    if (!i) return;
+    calculerPeaks(i.id, i.buf, i.type).then(({ peaks, duree: dur }) => {
+      if (!canvas.isConnected) return;
+      const opts = {};
+      if (i.mode === 'boucle' && dur) {
+        const a = Math.max(0, i.loopA || 0);
+        const b = (i.loopB && i.loopB > a) ? Math.min(i.loopB, dur) : dur;
+        opts.boucle = [a / dur, b / dur];
+      }
+      dessinerWave(canvas, peaks, opts);
+    }).catch(() => {});
+  });
 }
 
 function trouver(id) { return instrus.find((x) => x.id === id); }
@@ -149,6 +172,7 @@ function poserBorne(id, borne, val) {
   else { i.loopB = Math.max(val, (i.loopA || 0) + 0.1); }
   sauverBientot(i);
   majBorne(id, 'A'); majBorne(id, 'B');
+  dessinerWaves(); // repères A/B sur la waveform (crêtes en cache → peu coûteux)
 }
 
 function majBorne(id, borne) {
@@ -243,5 +267,6 @@ function confirmerSuppression(btn) {
   }
   const id = btn.dataset.suppr;
   if (playId === id) stopAudio();
+  oublierWave(id);
   supprimerInstru(id).then(() => rendreInstrus(appEl)).catch(alerteStockage);
 }
