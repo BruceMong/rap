@@ -304,14 +304,16 @@ function dessiner() {
     const bloc = row.closest('.bloc-ligne');
     const id = bloc && bloc.dataset.ligne;
     if (id) attacherGestesLigne(row, bloc, {
-      onRight: async () => { M = cyclerEtatLigne(M, id); await sauverMaintenant(); dessiner(); },
+      // Mise à jour SUR PLACE (pas de dessiner()) : enchaîner des swipes sur
+      // plusieurs lignes ne provoque plus de re-rendu qui casserait le geste suivant.
+      onRight: () => { M = cyclerEtatLigne(M, id); sauverBientot(); majEtatLigne(id); },
       onLeft: () => basculerMemo(id),
     });
   });
   appEl.querySelectorAll('.essai-row').forEach((row) => {
     const id = row.closest('.essai')?.dataset.idee;
     if (id) attacherSwipe(row, {
-      onRight: async () => { M = cyclerEtatIdee(M, id); await sauverMaintenant(); dessiner(); },
+      onRight: () => { M = cyclerEtatIdee(M, id); sauverBientot(); majEtatIdee(id); },
     });
   });
 
@@ -649,12 +651,14 @@ function attacherDrag(bloc) {
 function attacherGestesLigne(row, bloc, { onRight, onLeft } = {}) {
   let x0 = 0, y0 = 0, decide = false, swipe = false, actif = false, timer = null, drag = null;
   const annulerTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  const raz = () => { actif = false; swipe = false; decide = false; drag = null; annulerTimer();
+    row.style.transition = ''; row.style.transform = ''; row.style.opacity = ''; };
   row.addEventListener('pointerdown', (e) => {
+    raz(); // repart propre même si un geste précédent est resté « collé »
     if (e.pointerType !== 'touch') return;
     if (e.target.closest('.poignee, button')) return; // poignée et boutons gardent leur rôle
-    x0 = e.clientX; y0 = e.clientY; decide = false; swipe = false; actif = true; drag = null;
+    x0 = e.clientX; y0 = e.clientY; actif = true;
     const pid = e.pointerId;
-    annulerTimer();
     timer = setTimeout(() => {
       timer = null;
       if (!actif || decide) return; // déjà bougé → c'est un swipe/scroll, pas un appui long
@@ -681,17 +685,20 @@ function attacherGestesLigne(row, bloc, { onRight, onLeft } = {}) {
   });
   const fin = async (e) => {
     if (!actif) return;
-    actif = false; annulerTimer();
-    if (drag) { const d = drag; drag = null; await d.finir(); return; }
+    const enDrag = drag;
+    const faitSwipe = swipe;
     const dx = e.clientX - x0;
+    actif = false; swipe = false; decide = false; drag = null; annulerTimer();
+    if (enDrag) { await enDrag.finir(); return; }
     row.style.transition = 'transform .15s ease, opacity .15s ease';
     row.style.transform = ''; row.style.opacity = '';
-    if (!swipe) return;
+    if (!faitSwipe) return;
     if (dx > 55 && onRight) onRight();
     else if (dx < -55 && onLeft) onLeft();
   };
   row.addEventListener('pointerup', fin);
   row.addEventListener('pointercancel', fin);
+  row.addEventListener('lostpointercapture', () => { if (drag) { const d = drag; raz(); d.finir(); } else raz(); });
 }
 
 // Swipe tactile horizontal vers la droite sur `el` → onCycle(). Tactile seulement
@@ -699,10 +706,12 @@ function attacherGestesLigne(row, bloc, { onRight, onLeft } = {}) {
 // défilement vertical au navigateur et nous confie le geste horizontal.
 function attacherSwipe(el, { onRight, onLeft } = {}) {
   let x0 = 0, y0 = 0, decide = false, swipe = false, actif = false;
+  const raz = () => { actif = false; swipe = false; decide = false; el.style.transition = ''; el.style.transform = ''; el.style.opacity = ''; };
   el.addEventListener('pointerdown', (e) => {
+    raz(); // repart propre même si un geste précédent est resté « collé »
     if (e.pointerType !== 'touch') return;
     if (e.target.closest('.poignee, button')) return; // poignée (drag) et boutons intacts
-    x0 = e.clientX; y0 = e.clientY; decide = false; swipe = false; actif = true;
+    x0 = e.clientX; y0 = e.clientY; actif = true;
   });
   el.addEventListener('pointermove', (e) => {
     if (!actif) return;
@@ -722,17 +731,18 @@ function attacherSwipe(el, { onRight, onLeft } = {}) {
   });
   const fin = (e) => {
     if (!actif) return;
-    actif = false;
+    const faitSwipe = swipe;
     const dx = e.clientX - x0;
+    actif = false; swipe = false; decide = false;
     el.style.transition = 'transform .15s ease, opacity .15s ease';
-    el.style.transform = '';
-    el.style.opacity = '';
-    if (!swipe) return;
+    el.style.transform = ''; el.style.opacity = '';
+    if (!faitSwipe) return;
     if (dx > 55 && onRight) onRight();
     else if (dx < -55 && onLeft) onLeft();
   };
   el.addEventListener('pointerup', fin);
   el.addEventListener('pointercancel', fin);
+  el.addEventListener('lostpointercapture', () => raz());
 }
 
 function stopMemoAudio() {
@@ -824,6 +834,23 @@ function installerSwipeNav() {
   const fin = () => { candidat = false; };
   document.addEventListener('pointerup', fin);
   document.addEventListener('pointercancel', fin);
+}
+
+// Met à jour l'état visuel (vert/jaune) d'une ligne / d'un essai sans tout
+// redessiner (utilisé par le swipe, pour ne pas casser un geste enchaîné).
+function majEtatLigne(id) {
+  const l = lignesA().find((x) => x.id === id);
+  const row = appEl.querySelector(`.bloc-ligne[data-ligne="${CSS.escape(id)}"] .ligne-row`);
+  if (!l || !row) return;
+  row.classList.toggle('valide', !!l.valide);
+  row.classList.toggle('test', !!l.test);
+}
+function majEtatIdee(id) {
+  const idee = trouverEssai(id);
+  const essai = appEl.querySelector(`.essai[data-idee="${CSS.escape(id)}"]`);
+  if (!idee || !essai) return;
+  essai.classList.toggle('valide', !!idee.valide);
+  essai.classList.toggle('test', !!idee.test);
 }
 
 // Compteur de pieds (toujours) + schéma de rime en barres colorées (si activé).

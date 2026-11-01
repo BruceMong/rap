@@ -47,7 +47,7 @@ function trier(a, b) {
 // du cache du service worker, qui se met à jour un chargement trop tôt) : « vXX »
 // visible = ce code-ci tourne vraiment sur l'appareil. À garder synchro avec CACHE
 // dans sw.js à chaque déploiement.
-const APP_VERSION = 'v20';
+const APP_VERSION = 'v21';
 function afficherVersion() {
   const el = document.getElementById('app-version');
   if (el) el.textContent = APP_VERSION;
