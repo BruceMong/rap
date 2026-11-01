@@ -698,7 +698,6 @@ function attacherGestesLigne(row, bloc, { onRight, onLeft } = {}) {
   };
   row.addEventListener('pointerup', fin);
   row.addEventListener('pointercancel', fin);
-  row.addEventListener('lostpointercapture', () => { if (drag) { const d = drag; raz(); d.finir(); } else raz(); });
 }
 
 // Swipe tactile horizontal vers la droite sur `el` → onCycle(). Tactile seulement
@@ -742,7 +741,6 @@ function attacherSwipe(el, { onRight, onLeft } = {}) {
   };
   el.addEventListener('pointerup', fin);
   el.addEventListener('pointercancel', fin);
-  el.addEventListener('lostpointercapture', () => raz());
 }
 
 function stopMemoAudio() {
