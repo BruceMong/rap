@@ -130,7 +130,8 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .inter-ligne:hover .inter-plus, .inter-ligne:active .inter-plus, .inter-plus:focus-visible { opacity: 1; }
 .ligne-row.valide { background: var(--valide-bg); }
 .ligne-edit { flex: 1; min-width: 0; border: none; background: none; color: var(--fg);
-  font: inherit; font-size: 15.5px; resize: none; overflow: hidden; line-height: 1.5; padding: 4px 0; }
+  font: inherit; font-size: 15.5px; resize: none; overflow: hidden; line-height: 1.5; padding: 4px 0;
+  touch-action: pan-y; }
 .ligne-edit:focus { outline: none; }
 .pieds { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; flex: none;
   padding-top: 7px; min-width: 18px; text-align: right; }
@@ -155,7 +156,7 @@ body { background: var(--bg); color: var(--fg); font-family: var(--font-body); l
 .essai.valide > .essai-row { background: var(--valide-bg); }
 .essai.test > .essai-row { background: var(--test-bg); }
 .essai .essai-edit { flex: 1; min-width: 0; border: none; background: none; color: var(--fg);
-  font: inherit; font-size: 14px; resize: none; overflow: hidden; }
+  font: inherit; font-size: 14px; resize: none; overflow: hidden; touch-action: pan-y; }
 .sous { border-left: 1px dotted var(--line); padding-left: 8px; margin-top: 2px; }
 .toggle-idee { display: inline-flex; align-items: center; gap: 2px; }
 .toggle-idee .chevron { display: inline-block; transition: transform .15s; }
