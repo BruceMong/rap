@@ -123,9 +123,10 @@ function essaiHTML(idee) {
     </div>`;
 }
 
-// Bulle « + » dans la gouttière : insère une ligne juste avant `avantId`.
+// Bulle « + » dans la gouttière : le survol de la gouttière révèle le « + », mais
+// seul le cercle (le bouton) insère — un clic à gauche/droite ne fait rien.
 function interHTML(avantId) {
-  return `<button class="inter-ligne" data-avant="${esc(avantId)}" title="insérer une ligne ici" aria-label="insérer une ligne"><span>+</span></button>`;
+  return `<div class="inter-ligne"><button class="inter-plus" data-avant="${esc(avantId)}" title="insérer une ligne ici" aria-label="insérer une ligne">+</button></div>`;
 }
 
 function ligneHTML(l) {
@@ -208,7 +209,7 @@ function dessiner() {
     if (tas.length) tas[tas.length - 1].focus();
   });
 
-  appEl.querySelectorAll('.inter-ligne').forEach((b) => b.addEventListener('click', async () => {
+  appEl.querySelectorAll('.inter-plus').forEach((b) => b.addEventListener('click', async () => {
     const id = b.dataset.avant;
     const idx = lignesA().findIndex((l) => l.id === id); // la nouvelle ligne prendra cet index
     M = insererLigneAvant(M, id, '');
@@ -300,8 +301,9 @@ function dessiner() {
   // Swipe tactile vers la droite : cycle l'état (vert → jaune → normal), raccourci
   // du bouton ✓. Sur la ligne et sur chaque essai de tiroir.
   appEl.querySelectorAll('.ligne-row').forEach((row) => {
-    const id = row.closest('.bloc-ligne')?.dataset.ligne;
-    if (id) attacherSwipe(row, {
+    const bloc = row.closest('.bloc-ligne');
+    const id = bloc && bloc.dataset.ligne;
+    if (id) attacherGestesLigne(row, bloc, {
       onRight: async () => { M = cyclerEtatLigne(M, id); await sauverMaintenant(); dessiner(); },
       onLeft: () => basculerMemo(id),
     });
@@ -529,104 +531,167 @@ function dessinerLecture() {
   monterPads();
 }
 
-// Glisser une ligne par sa poignée, façon Notion : par défaut on la déplace (un
-// repère montre où elle se posera) ; en s'attardant au centre d'une ligne on la
-// range dedans ; lâcher sur la pastille ✕ ou en dehors annule.
+// Cœur du drag d'une ligne, façon Notion (visuels + logique). Renvoie { move,
+// finir } ; le déclencheur (poignée = immédiat, ou appui long n'importe où sur la
+// ligne) câble les événements pointeur. Au centre d'une ligne on la range dedans ;
+// lâcher sur la pastille ✕ ou en dehors annule.
+function creerDrag(bloc, clientX, clientY) {
+  const sourceId = bloc.dataset.ligne;
+  const l = lignesA().find((x) => x.id === sourceId);
+  const conteneur = appEl.querySelector('#lignes');
+
+  const ghost = document.createElement('div');
+  ghost.className = 'drag-ghost';
+  ghost.textContent = (l && l.texte.trim()) ? l.texte : '(vide)';
+  document.body.appendChild(ghost);
+  const placer = (x, y) => { ghost.style.transform = `translate(${x + 12}px, ${y - 16}px) rotate(-2deg)`; };
+  placer(clientX, clientY);
+
+  const annuleur = document.createElement('div');
+  annuleur.className = 'drag-cancel';
+  annuleur.id = 'drag-cancel';
+  annuleur.textContent = '✕ annuler';
+  document.body.appendChild(annuleur);
+
+  const indic = document.createElement('div');
+  indic.className = 'drop-indic';
+
+  bloc.classList.add('drag-source');
+  document.body.classList.add('drag-en-cours');
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  try { window.getSelection().removeAllRanges(); } catch { /* ignore */ }
+
+  let mode = 'annuler';     // 'reorder' | 'nest' | 'annuler'
+  let cibleNest = null;
+  let reorderOver = null, reorderAvant = true;
+  let hoverId = null, hoverDepuis = 0;
+
+  const clearVisu = () => {
+    if (cibleNest) { cibleNest.classList.remove('drag-cible'); cibleNest = null; }
+    if (indic.parentNode) indic.remove();
+    annuleur.classList.remove('actif');
+  };
+
+  const move = (ev) => {
+    placer(ev.clientX, ev.clientY);
+    const el = document.elementFromPoint(ev.clientX, ev.clientY);
+    if (el && el.closest('#drag-cancel')) { clearVisu(); annuleur.classList.add('actif'); mode = 'annuler'; hoverId = null; return; }
+    const over = el && el.closest('.bloc-ligne');
+    if (!over || over === bloc || !conteneur || !conteneur.contains(over)) { clearVisu(); mode = 'annuler'; hoverId = null; return; }
+    const rect = over.getBoundingClientRect();
+    const rel = (ev.clientY - rect.top) / rect.height;
+    const id = over.dataset.ligne;
+    if (hoverId !== id) { hoverId = id; hoverDepuis = performance.now(); }
+    const longHover = performance.now() - hoverDepuis > 600;
+    if (rel > 0.3 && rel < 0.7 && longHover) {
+      if (indic.parentNode) indic.remove();
+      if (cibleNest !== over) { if (cibleNest) cibleNest.classList.remove('drag-cible'); cibleNest = over; over.classList.add('drag-cible'); }
+      mode = 'nest';
+    } else {
+      if (cibleNest) { cibleNest.classList.remove('drag-cible'); cibleNest = null; }
+      reorderOver = over;
+      reorderAvant = rel < 0.5;
+      if (reorderAvant) conteneur.insertBefore(indic, over); else conteneur.insertBefore(indic, over.nextSibling);
+      mode = 'reorder';
+    }
+    annuleur.classList.remove('actif');
+  };
+
+  const finir = async () => {
+    ghost.remove(); annuleur.remove();
+    document.body.classList.remove('drag-en-cours');
+    const cibleId = cibleNest ? cibleNest.dataset.ligne : null;
+    const over = reorderOver;
+    const avant = reorderAvant;
+    clearVisu();
+    bloc.classList.remove('drag-source');
+    if (mode === 'nest' && cibleId) {
+      M = rangerDansLigne(M, sourceId, cibleId);
+      ouverts.add(cibleId);
+      await sauverMaintenant(); dessiner();
+    } else if (mode === 'reorder' && over) {
+      const lignes = lignesA();
+      const overIdx = lignes.findIndex((x) => x.id === over.dataset.ligne);
+      const srcIdx = lignes.findIndex((x) => x.id === sourceId);
+      let target = avant ? overIdx : overIdx + 1;
+      if (srcIdx < target) target -= 1;
+      M = deplacerLigne(M, sourceId, target);
+      await sauverMaintenant(); dessiner();
+    }
+  };
+
+  return { move, finir };
+}
+
+// Poignée ⠿ : drag immédiat (souris comprise).
 function attacherDrag(bloc) {
   const poignee = bloc.querySelector('.poignee');
   if (!poignee) return;
   poignee.addEventListener('pointerdown', (e) => {
     e.preventDefault();
-    const sourceId = bloc.dataset.ligne;
-    const l = lignesA().find((x) => x.id === sourceId);
-    const conteneur = appEl.querySelector('#lignes');
-
-    const ghost = document.createElement('div');
-    ghost.className = 'drag-ghost';
-    ghost.textContent = (l && l.texte.trim()) ? l.texte : '(vide)';
-    document.body.appendChild(ghost);
-    const placer = (x, y) => { ghost.style.transform = `translate(${x + 12}px, ${y - 16}px) rotate(-2deg)`; };
-    placer(e.clientX, e.clientY);
-
-    const annuleur = document.createElement('div');
-    annuleur.className = 'drag-cancel';
-    annuleur.id = 'drag-cancel';
-    annuleur.textContent = '✕ annuler';
-    document.body.appendChild(annuleur);
-
-    const indic = document.createElement('div');
-    indic.className = 'drop-indic';
-
-    bloc.classList.add('drag-source');
-    document.body.classList.add('drag-en-cours');
-    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    const d = creerDrag(bloc, e.clientX, e.clientY);
     try { poignee.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-
-    let mode = 'annuler';     // 'reorder' | 'nest' | 'annuler'
-    let cibleNest = null;
-    let reorderOver = null, reorderAvant = true;
-    let hoverId = null, hoverDepuis = 0;
-
-    const clearVisu = () => {
-      if (cibleNest) { cibleNest.classList.remove('drag-cible'); cibleNest = null; }
-      if (indic.parentNode) indic.remove();
-      annuleur.classList.remove('actif');
-    };
-
-    const move = (ev) => {
-      placer(ev.clientX, ev.clientY);
-      const el = document.elementFromPoint(ev.clientX, ev.clientY);
-      if (el && el.closest('#drag-cancel')) { clearVisu(); annuleur.classList.add('actif'); mode = 'annuler'; hoverId = null; return; }
-      const over = el && el.closest('.bloc-ligne');
-      if (!over || over === bloc || !conteneur || !conteneur.contains(over)) { clearVisu(); mode = 'annuler'; hoverId = null; return; }
-      const rect = over.getBoundingClientRect();
-      const rel = (ev.clientY - rect.top) / rect.height;
-      const id = over.dataset.ligne;
-      if (hoverId !== id) { hoverId = id; hoverDepuis = performance.now(); }
-      const longHover = performance.now() - hoverDepuis > 600;
-      if (rel > 0.3 && rel < 0.7 && longHover) {
-        if (indic.parentNode) indic.remove();
-        if (cibleNest !== over) { if (cibleNest) cibleNest.classList.remove('drag-cible'); cibleNest = over; over.classList.add('drag-cible'); }
-        mode = 'nest';
-      } else {
-        if (cibleNest) { cibleNest.classList.remove('drag-cible'); cibleNest = null; }
-        reorderOver = over;
-        reorderAvant = rel < 0.5;
-        if (reorderAvant) conteneur.insertBefore(indic, over); else conteneur.insertBefore(indic, over.nextSibling);
-        mode = 'reorder';
-      }
-      annuleur.classList.remove('actif');
-    };
-
+    const mv = (ev) => d.move(ev);
     const up = async () => {
-      poignee.removeEventListener('pointermove', move);
+      poignee.removeEventListener('pointermove', mv);
       poignee.removeEventListener('pointerup', up);
       poignee.removeEventListener('pointercancel', up);
-      ghost.remove(); annuleur.remove();
-      document.body.classList.remove('drag-en-cours');
-      const cibleId = cibleNest ? cibleNest.dataset.ligne : null;
-      const over = reorderOver;
-      const avant = reorderAvant;
-      clearVisu();
-      bloc.classList.remove('drag-source');
-      if (mode === 'nest' && cibleId) {
-        M = rangerDansLigne(M, sourceId, cibleId);
-        ouverts.add(cibleId);
-        await sauverMaintenant(); dessiner();
-      } else if (mode === 'reorder' && over) {
-        const lignes = lignesA();
-        const overIdx = lignes.findIndex((x) => x.id === over.dataset.ligne);
-        const srcIdx = lignes.findIndex((x) => x.id === sourceId);
-        let target = avant ? overIdx : overIdx + 1;
-        if (srcIdx < target) target -= 1;
-        M = deplacerLigne(M, sourceId, target);
-        await sauverMaintenant(); dessiner();
-      }
+      await d.finir();
     };
-    poignee.addEventListener('pointermove', move);
+    poignee.addEventListener('pointermove', mv);
     poignee.addEventListener('pointerup', up);
     poignee.addEventListener('pointercancel', up);
   });
+}
+
+// Gestes tactiles sur toute la ligne : tap = édition (défaut) ; swipe droite =
+// état, swipe gauche = mémo ; appui long (sans bouger) n'importe où = drag.
+function attacherGestesLigne(row, bloc, { onRight, onLeft } = {}) {
+  let x0 = 0, y0 = 0, decide = false, swipe = false, actif = false, timer = null, drag = null;
+  const annulerTimer = () => { if (timer) { clearTimeout(timer); timer = null; } };
+  row.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    if (e.target.closest('.poignee, button')) return; // poignée et boutons gardent leur rôle
+    x0 = e.clientX; y0 = e.clientY; decide = false; swipe = false; actif = true; drag = null;
+    const pid = e.pointerId;
+    annulerTimer();
+    timer = setTimeout(() => {
+      timer = null;
+      if (!actif || decide) return; // déjà bougé → c'est un swipe/scroll, pas un appui long
+      drag = creerDrag(bloc, x0, y0);
+      try { row.setPointerCapture(pid); } catch { /* ignore */ }
+    }, 450);
+  });
+  row.addEventListener('pointermove', (e) => {
+    if (!actif) return;
+    if (drag) { e.preventDefault(); drag.move(e); return; }
+    const dx = e.clientX - x0, dy = e.clientY - y0;
+    if (!decide) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      decide = true; annulerTimer();
+      swipe = Math.abs(dx) > Math.abs(dy) * 1.3;
+      if (swipe) { try { row.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
+    }
+    if (swipe) {
+      e.preventDefault();
+      row.style.transition = 'none';
+      row.style.transform = `translateX(${Math.max(-96, Math.min(96, dx))}px)`;
+      row.style.opacity = Math.abs(dx) > 55 ? '0.8' : '1';
+    }
+  });
+  const fin = async (e) => {
+    if (!actif) return;
+    actif = false; annulerTimer();
+    if (drag) { const d = drag; drag = null; await d.finir(); return; }
+    const dx = e.clientX - x0;
+    row.style.transition = 'transform .15s ease, opacity .15s ease';
+    row.style.transform = ''; row.style.opacity = '';
+    if (!swipe) return;
+    if (dx > 55 && onRight) onRight();
+    else if (dx < -55 && onLeft) onLeft();
+  };
+  row.addEventListener('pointerup', fin);
+  row.addEventListener('pointercancel', fin);
 }
 
 // Swipe tactile horizontal vers la droite sur `el` → onCycle(). Tactile seulement
