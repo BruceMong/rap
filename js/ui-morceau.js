@@ -147,8 +147,7 @@ function ligneHTML(l) {
     : (memos.has(l.id) ? `<button class="mini memo-play" data-memo-play="${esc(l.id)}" title="écouter le mémo vocal">♪▶</button>` : '')}
           <button class="mini toggle-placard${np ? ' aPlacard' : ''}" data-ligne="${esc(l.id)}" title="brouillons">
             <span class="chevron">›</span>${np ? `<span class="badge">${np}</span>` : ''}</button>
-          <button class="mini ${l.valide ? 'actif' : ''}" data-valide="${esc(l.id)}" title="garder (jaune)">✓</button>
-          <button class="mini" data-menu-ligne="${esc(l.id)}" title="plus d’actions">⋯</button>
+          <button class="mini mini-menu" data-menu-ligne="${esc(l.id)}" title="plus d’actions">⋯</button>
         </span>
       </div>
       ${placard}
@@ -278,10 +277,6 @@ function dessiner() {
     if (ouverts.has(id)) ouverts.delete(id); else ouverts.add(id);
     b.closest('.bloc-ligne').classList.toggle('ouvert');
   }));
-  appEl.querySelectorAll('[data-valide]').forEach((b) => b.addEventListener('click', async () => {
-    M = basculerValide(M, b.dataset.valide);
-    await sauverMaintenant(); dessiner();
-  }));
   appEl.querySelectorAll('[data-memo-play]').forEach((b) => b.addEventListener('click', () => jouerMemo(b.dataset.memoPlay)));
   appEl.querySelectorAll('[data-memo-stop]').forEach((b) => b.addEventListener('click', arreterMemo));
   appEl.querySelectorAll('.add-essai').forEach((b) => b.addEventListener('click', async () => {
@@ -346,12 +341,16 @@ function ouvrirMenuLigne(id, bloc) {
   const menu = document.createElement('div');
   menu.className = 'menu-ligne';
   menu.innerHTML = `
-    <button data-a="test" class="${l.test ? 'actif' : ''}">à tester</button>
+    <button data-a="test" class="${l.test ? 'actif' : ''}">à tester (vert)</button>
+    <button data-a="garder" class="${l.valide ? 'actif' : ''}">garder (jaune)</button>
     <button data-a="rimes">rimes ♪</button>
     <button data-a="inserer">insérer dessous</button>
     ${memos.has(id) ? '<button data-a="memo-suppr">supprimer le mémo vocal</button>' : ''}
     <button data-a="suppr">supprimer</button>`;
   bloc.querySelector('.ligne-row').insertAdjacentElement('afterend', menu);
+  menu.querySelector('[data-a="garder"]').addEventListener('click', async () => {
+    M = basculerValide(M, id); await sauverMaintenant(); dessiner();
+  });
   const memoSuppr = menu.querySelector('[data-a="memo-suppr"]');
   if (memoSuppr) memoSuppr.addEventListener('click', () => { menu.remove(); supprimerMemoLigne(id); });
   menu.querySelector('[data-a="test"]').addEventListener('click', async () => {
