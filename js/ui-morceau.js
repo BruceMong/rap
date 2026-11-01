@@ -396,16 +396,19 @@ function ouvrirFeuilleLigne(id) {
     const ta = bl && bl.nextElementSibling && bl.nextElementSibling.querySelector('.ligne-edit');
     if (ta) ta.focus();
   });
-  const suppr = sheet.querySelector('[data-a="suppr"]');
-  suppr.addEventListener('click', async () => {
-    if (suppr.dataset.sure !== '1') {
-      suppr.dataset.sure = '1';
-      suppr.innerHTML = '<span class="fa-ic">🗑</span>Confirmer la suppression';
-      return;
-    }
+  // Une ligne vide (sans texte, sans brouillon, sans mémo) se supprime direct ;
+  // sinon on demande confirmation en 2 taps pour éviter la perte accidentelle.
+  const estVide = !l.texte.trim() && l.placards.length === 0 && !memos.has(id);
+  const faireSuppr = async () => {
     fermerFeuille();
     if (memos.has(id)) { supprimerMemo(id).catch(() => {}); memos.delete(id); }
     M = supprimerLigne(M, id); await sauverMaintenant(); dessiner();
+  };
+  const suppr = sheet.querySelector('[data-a="suppr"]');
+  suppr.addEventListener('click', async () => {
+    if (estVide || suppr.dataset.sure === '1') { await faireSuppr(); return; }
+    suppr.dataset.sure = '1';
+    suppr.innerHTML = '<span class="fa-ic">🗑</span>Confirmer la suppression';
   });
 }
 
